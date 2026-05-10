@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-codex/create-custom-binance-grid-trading-bot-9b1qhc
 import math
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,34 +11,19 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .backtest import run_backtest, synthetic_closes
-
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
-
-main
 from .config import BotConfig
 from .engine import GridEngine
 from .market import BinancePublicPriceFeed, DeterministicPriceFeed, HybridPriceFeed
 
 CONFIG = BotConfig()
 engine = GridEngine(CONFIG)
- codex/create-custom-binance-grid-trading-bot-9b1qhc
-CONFIG = BotConfig()
-engine = GridEngine(CONFIG)
-
-engine = GridEngine(BotConfig())
- main
 price_feed = HybridPriceFeed(
     live_feed=BinancePublicPriceFeed(symbol="BTCUSDT"),
     fallback_feed=DeterministicPriceFeed(),
 )
-codex/create-custom-binance-grid-trading-bot-9b1qhc
 state_lock = Lock()
 paused = False
 last_backtest: dict | None = None
-
- main
 
 PAGE = """
 <!doctype html>
@@ -53,7 +37,6 @@ PAGE = """
     body { margin: 0; background: #0b1020; color: #ecf2ff; }
     header { padding: 24px; background: linear-gradient(135deg, #172554, #111827); border-bottom: 1px solid #23304d; }
     main { padding: 24px; display: grid; gap: 18px; }
- codex/create-custom-binance-grid-trading-bot-9b1qhc
     .cards, .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
     .card, .panel, table { background: #111827; border: 1px solid #23304d; border-radius: 16px; box-shadow: 0 16px 32px #0004; }
     .card, .panel { padding: 16px; }
@@ -65,13 +48,6 @@ PAGE = """
     .label { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .value { margin-top: 8px; font-size: 24px; font-weight: 800; }
     .small-value { margin-top: 8px; font-size: 18px; font-weight: 700; }
-
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
-    .card, table { background: #111827; border: 1px solid #23304d; border-radius: 16px; box-shadow: 0 16px 32px #0004; }
-    .card { padding: 16px; }
-    .label { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-    .value { margin-top: 8px; font-size: 24px; font-weight: 800; }
- main
     .good { color: #34d399; } .bad { color: #fb7185; } .warn { color: #fbbf24; }
     table { width: 100%; border-collapse: collapse; overflow: hidden; }
     th, td { padding: 12px 14px; border-bottom: 1px solid #23304d; text-align: left; font-size: 14px; }
@@ -79,10 +55,6 @@ PAGE = """
     .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
     .status-line { min-height: 24px; color: #a8b3c7; }
- codex/create-custom-binance-grid-trading-bot-9b1qhc
-    .status-line { min-height: 24px; color: #a8b3c7; }
-
- main
   </style>
 </head>
 <body>
@@ -91,7 +63,6 @@ PAGE = """
     <p class="note">Simulation only: no private Binance keys and no live orders. Public BTC price is used when available; otherwise Botify falls back to a deterministic local feed.</p>
   </header>
   <main>
- codex/create-custom-binance-grid-trading-bot-9b1qhc
     <section class="panel">
       <h2>Controls</h2>
       <div class="toolbar">
@@ -111,10 +82,6 @@ PAGE = """
       <div class="cards" id="backtestCards"><article class="card"><div class="label">Status</div><div class="small-value">Click “Run quick synthetic backtest”.</div></article></div>
     </section>
     <section>
-
-    <section class="cards" id="cards"></section>
-    <section>
- main
       <h2>Open Positions</h2>
       <table><thead><tr><th>Side</th><th>Entry</th><th>Target</th><th>Stop</th><th>Qty</th><th>Unrealized</th></tr></thead><tbody id="positions"></tbody></table>
     </section>
@@ -127,7 +94,6 @@ PAGE = """
 const money = (n) => Number(n).toLocaleString(undefined, {style: 'currency', currency: 'USD'});
 const num = (n, d=2) => Number(n).toLocaleString(undefined, {maximumFractionDigits: d});
 function pnlClass(n) { return Number(n) >= 0 ? 'good' : 'bad'; }
- codex/create-custom-binance-grid-trading-bot-9b1qhc
 async function postJson(path) {
   const response = await fetch(path, {method: 'POST'});
   if (!response.ok) throw new Error(`${path} failed with ${response.status}`);
@@ -145,11 +111,6 @@ function renderDashboard(data) {
   document.getElementById('statusLine').textContent = data.paused
     ? 'Paused: Botify is not advancing new price ticks. Click Resume to continue.'
     : 'Running: Botify advances one simulated tick every refresh. No live orders are placed.';
-
-async function refresh() {
-  const response = await fetch('/api/tick');
-  const data = await response.json();
- main
   document.getElementById('cards').innerHTML = [
     ['BTC Price', money(data.price), ''],
     ['Price Source', `<span class="pill">${data.price_source}</span>`, ''],
@@ -282,7 +243,6 @@ def tick_dashboard() -> dict:
             engine.on_price(price)
         snapshot = _snapshot_unlocked()
     return snapshot
-        return _snapshot_unlocked()
 
 
 def control_state() -> dict:
@@ -291,7 +251,6 @@ def control_state() -> dict:
     with state_lock:
         state = {"paused": paused, "tick_count": engine.state.tick_count}
     return state
-        return {"paused": paused, "tick_count": engine.state.tick_count}
 
 
 def snapshot_with_controls() -> dict:
@@ -300,7 +259,6 @@ def snapshot_with_controls() -> dict:
     with state_lock:
         snapshot = _snapshot_unlocked()
     return snapshot
-        return _snapshot_unlocked()
 
 
 def toggle_pause() -> dict:
@@ -311,7 +269,6 @@ def toggle_pause() -> dict:
         paused = not paused
         snapshot = _snapshot_unlocked()
     return snapshot
-        return _snapshot_unlocked()
 
 
 def reset_simulation() -> dict:
@@ -324,7 +281,6 @@ def reset_simulation() -> dict:
         last_backtest = None
         snapshot = _snapshot_unlocked()
     return snapshot
-        return _snapshot_unlocked()
 
 
 def run_quick_backtest(limit: int = 500) -> dict:
@@ -342,7 +298,6 @@ def run_quick_backtest(limit: int = 500) -> dict:
         last_backtest = _report_dict(report)
         payload = {"report": last_backtest, "state": _snapshot_unlocked()}
     return payload
-        return {"report": last_backtest, "state": _snapshot_unlocked()}
 
 
 def _report_dict(report: Any) -> dict:
@@ -357,9 +312,6 @@ def _snapshot_unlocked() -> dict:
     snapshot["price_source"] = "fallback" if price_feed.using_fallback else "binance_public"
     snapshot["paused"] = paused
     snapshot["last_backtest"] = last_backtest
-def _snapshot_with_source() -> dict:
-    snapshot = engine.snapshot()
-    snapshot["price_source"] = "fallback" if price_feed.using_fallback else "binance_public"
     return snapshot
 
 
