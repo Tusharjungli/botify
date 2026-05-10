@@ -55,6 +55,10 @@ PAGE = """
     .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
     .status-line { min-height: 24px; color: #a8b3c7; }
+    .chart-wrap { position: relative; height: 360px; }
+    canvas { width: 100%; height: 100%; border-radius: 14px; background: #08111f; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: #a8b3c7; font-size: 13px; }
+    .legend span::before { content: ''; display: inline-block; width: 18px; height: 3px; margin-right: 6px; vertical-align: middle; background: var(--c); }
   </style>
 </head>
 <body>
@@ -73,6 +77,18 @@ PAGE = """
       <p class="status-line" id="statusLine">Loading dashboard state...</p>
     </section>
     <section class="cards" id="cards"></section>
+    <section class="panel">
+      <h2>BTC Price Chart</h2>
+      <p class="note">Shows recent BTC prices, grid range, open entries, targets, and stops. This is still simulation-only.</p>
+      <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+      <div class="legend">
+        <span style="--c:#38bdf8">Price</span>
+        <span style="--c:#64748b">Grid range</span>
+        <span style="--c:#fbbf24">Entry</span>
+        <span style="--c:#34d399">Target</span>
+        <span style="--c:#fb7185">Stop</span>
+      </div>
+    </section>
     <section>
       <h2>Risk Settings</h2>
       <div class="settings" id="settings"></div>
@@ -149,7 +165,80 @@ function renderDashboard(data) {
     <tr><td>${t.side}</td><td>${money(t.entry_price)}</td><td>${money(t.exit_price)}</td><td class="${pnlClass(t.pnl)}">${money(t.pnl)}</td><td>${t.reason}</td><td>${t.closed_at}</td></tr>
   `).join('') : '<tr><td colspan="6">No closed trades yet.</td></tr>';
 
+  drawChart(data.chart);
   if (data.last_backtest) renderBacktest(data.last_backtest);
+}
+function drawChart(chart) {
+  const canvas = document.getElementById('priceChart');
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const width = rect.width;
+  const height = rect.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = '#08111f';
+  ctx.fillRect(0, 0, width, height);
+  if (!chart || !chart.prices || chart.prices.length < 2) {
+    ctx.fillStyle = '#93a4bd';
+    ctx.font = '16px Inter, Arial';
+    ctx.fillText('Collecting price ticks for chart...', 18, 34);
+    return;
+  }
+  const pad = {left: 72, right: 18, top: 20, bottom: 34};
+  const markers = [];
+  (chart.positions || []).forEach(p => {
+    markers.push({price: p.entry_price, color: '#fbbf24', label: p.side});
+    markers.push({price: p.target_price, color: '#34d399', label: 'target'});
+    markers.push({price: p.stop_price, color: '#fb7185', label: 'stop'});
+  });
+  const gridValues = [chart.grid_lower, chart.grid_upper].filter(v => Number.isFinite(v));
+  const values = chart.prices.concat(gridValues, markers.map(m => m.price));
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  const buffer = Math.max((max - min) * 0.08, max * 0.0005);
+  min -= buffer;
+  max += buffer;
+  const x = (i) => pad.left + (i / (chart.prices.length - 1)) * (width - pad.left - pad.right);
+  const y = (price) => pad.top + ((max - price) / (max - min)) * (height - pad.top - pad.bottom);
+
+  ctx.strokeStyle = '#172554';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const yy = pad.top + i * (height - pad.top - pad.bottom) / 4;
+    ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(width - pad.right, yy); ctx.stroke();
+    const price = max - i * (max - min) / 4;
+    ctx.fillStyle = '#93a4bd'; ctx.font = '12px Inter, Arial';
+    ctx.fillText(money(price), 8, yy + 4);
+  }
+
+  function horizontal(price, color, label, dash = []) {
+    if (!Number.isFinite(price)) return;
+    const yy = y(price);
+    ctx.save(); ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(width - pad.right, yy); ctx.stroke(); ctx.restore();
+    ctx.fillStyle = color; ctx.font = '12px Inter, Arial'; ctx.fillText(label, pad.left + 8, yy - 5);
+  }
+  horizontal(chart.grid_lower, '#64748b', 'grid low', [6, 6]);
+  horizontal(chart.grid_upper, '#64748b', 'grid high', [6, 6]);
+  markers.forEach(m => horizontal(m.price, m.color, m.label, [3, 5]));
+
+  const grad = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
+  grad.addColorStop(0, '#38bdf844'); grad.addColorStop(1, '#38bdf800');
+  ctx.beginPath();
+  chart.prices.forEach((price, i) => { i ? ctx.lineTo(x(i), y(price)) : ctx.moveTo(x(i), y(price)); });
+  ctx.lineTo(x(chart.prices.length - 1), height - pad.bottom);
+  ctx.lineTo(x(0), height - pad.bottom);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+  ctx.beginPath();
+  chart.prices.forEach((price, i) => { i ? ctx.lineTo(x(i), y(price)) : ctx.moveTo(x(i), y(price)); });
+  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 2.5; ctx.stroke();
+
+  ctx.fillStyle = '#e2e8f0'; ctx.font = '13px Inter, Arial';
+  ctx.fillText(`${chart.prices.length} ticks • Last ${money(chart.last_price)}`, pad.left, height - 10);
 }
 function renderBacktest(report) {
   document.getElementById('backtestCards').innerHTML = [
@@ -223,7 +312,7 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
-        self.wfile.write(encoded)
+        self._safe_write(encoded)
 
     def _send_json(self, payload: dict, status: HTTPStatus = HTTPStatus.OK) -> None:
         encoded = json.dumps(payload).encode("utf-8")
@@ -231,7 +320,13 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
-        self.wfile.write(encoded)
+        self._safe_write(encoded)
+
+    def _safe_write(self, encoded: bytes) -> None:
+        try:
+            self.wfile.write(encoded)
+        except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+            return
 
 
 def tick_dashboard() -> dict:
@@ -312,7 +407,20 @@ def _snapshot_unlocked() -> dict:
     snapshot["price_source"] = "fallback" if price_feed.using_fallback else "binance_public"
     snapshot["paused"] = paused
     snapshot["last_backtest"] = last_backtest
+    snapshot["chart"] = _chart_payload(snapshot)
     return snapshot
+
+
+def _chart_payload(snapshot: dict) -> dict:
+    grid = snapshot.get("grid", [])
+    prices = engine.state.prices[-120:]
+    return {
+        "prices": prices,
+        "last_price": snapshot.get("price", 0.0),
+        "grid_lower": grid[0] if grid else None,
+        "grid_upper": grid[-1] if grid else None,
+        "positions": snapshot.get("positions", []),
+    }
 
 
 def run(host: str = "127.0.0.1", port: int = 5000) -> None:

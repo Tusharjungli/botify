@@ -26,3 +26,18 @@ def test_quick_backtest_result_is_stored_on_dashboard_state():
 
     snapshot = app.snapshot_with_controls()
     assert snapshot["last_backtest"]["candles"] == 60
+
+
+def test_chart_payload_tracks_recent_prices_and_grid():
+    app.reset_simulation()
+    app.engine.on_price(80_000)
+    app.engine.on_price(80_100)
+
+    snapshot = app.snapshot_with_controls()
+    chart = snapshot["chart"]
+
+    assert chart["prices"] == [80_000, 80_100]
+    assert chart["last_price"] == 80_100
+    assert chart["grid_lower"] == snapshot["grid"][0]
+    assert chart["grid_upper"] == snapshot["grid"][-1]
+    assert chart["positions"] == snapshot["positions"]
