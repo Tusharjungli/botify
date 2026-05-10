@@ -1,21 +1,28 @@
 # Botify
 
-Botify is a BTC-only cryptocurrency grid bot project. The first milestone is a **safe localhost simulator**: it shows real-time BTC grid behavior, risk limits, open positions, and simulated PnL without connecting private Binance API keys or placing live orders.
+Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a **safe localhost simulator and backtester**: it shows real-time BTC grid behavior, risk limits, open positions, and simulated PnL without connecting private Binance API keys or placing live orders.
 
-> Risk note: crypto futures trading can lose money quickly. This repository starts with simulation only so the strategy, dashboard, and guardrails can be tested before any live Binance integration.
+> Risk note: crypto futures trading can lose money quickly. This repository starts with simulation and backtesting only so the strategy, dashboard, and guardrails can be tested before any live Binance integration.
+
+## Current status
+
+- ✅ BTC-only simulator dashboard for `BTCUSDT`.
+- ✅ Public Binance BTC price feed with deterministic offline fallback.
+- ✅ Simulated balance, realized PnL, unrealized PnL, win rate, open positions, and recent trades.
+- ✅ Moderate-risk defaults: low per-order risk, max open positions, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
+- ✅ Beginner-friendly BTC backtest command.
+- ❌ No private Binance API keys yet.
+- ❌ No live orders yet.
 
 ## Why the first step is simulation
 
-Binance Futures Grid automates buy/sell orders at preset intervals inside a configured range and supports auto/manual parameters and leverage. Botify keeps those grid ideas but adds local transparency and custom controls before live trading:
-
-- BTC-only enforcement (`BTCUSDT`) until the strategy is proven.
-- Local dashboard you can run on `localhost`.
-- Simulated balance, realized PnL, unrealized PnL, win rate, open positions, and recent trades.
-- Moderate-risk defaults: low per-order risk, max open positions, 2x leverage cap by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
-- Public Binance BTC ticker when available, with deterministic offline fallback when public data is unavailable.
-- No private API keys and no live orders in milestone 1.
+Binance Futures Grid automates buy/sell orders at preset intervals inside a configured range and supports auto/manual parameters and leverage. Botify keeps those grid ideas but adds local transparency and custom controls before live trading.
 
 ## Install
+
+Create and activate a virtual environment, then install requirements.
+
+### Mac/Linux/Git Bash
 
 ```bash
 python -m venv .venv
@@ -23,10 +30,27 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Windows PowerShell
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
 ## Run the localhost dashboard
+
+### Mac/Linux/Git Bash
 
 ```bash
 PYTHONPATH=src python src/main.py
+```
+
+### Windows PowerShell
+
+```powershell
+$env:PYTHONPATH="src"
+python src/main.py
 ```
 
 Then open:
@@ -40,7 +64,6 @@ You can also run the compatibility launcher:
 ```bash
 PYTHONPATH=. python bot.py
 ```
-
 
 ## Run a BTC backtest
 
@@ -72,12 +95,13 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 
 ## Step-by-step roadmap
 
-1. **Local BTC simulator and dashboard** — current milestone.
-2. Add backtesting from historical BTC candles.
-3. Add paper-trading mode with Binance testnet or a local exchange emulator.
-4. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
-5. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
-6. Only after BTC is stable, consider adding other symbols.
+1. **Local BTC simulator and dashboard** — done.
+2. **BTC backtesting command** — done.
+3. Improve dashboard controls: start/pause, reset, settings panel, and chart.
+4. Add paper-trading mode with Binance testnet or a local exchange emulator.
+5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
+6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
+7. Only after BTC is stable, consider adding other symbols.
 
 ## Tests
 
