@@ -1,5 +1,11 @@
 # Botify
 
+Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a **safe localhost simulator and backtester**: it shows real-time BTC grid behavior, risk limits, open positions, and simulated PnL without connecting private Binance API keys or placing live orders.
+
+> Risk note: crypto futures trading can lose money quickly. This repository starts with simulation and backtesting only so the strategy, dashboard, and guardrails can be tested before any live Binance integration.
+
+## Current status
+
 codex/create-custom-binance-grid-trading-bot-9b1qhc
 
 codex/create-custom-binance-grid-trading-bot-nrrk67
@@ -15,6 +21,7 @@ Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a
 - ✅ Simulated balance, realized PnL, unrealized PnL, win rate, open positions, and recent trades.
 - ✅ Moderate-risk defaults: low per-order risk, max open positions, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
 - ✅ Beginner-friendly BTC backtest command.
+- ✅ Dashboard pause/resume, reset, risk settings, and quick synthetic backtest controls.
 codex/create-custom-binance-grid-trading-bot-9b1qhc
 - ✅ Dashboard pause/resume, reset, risk settings, and quick synthetic backtest controls.
 main

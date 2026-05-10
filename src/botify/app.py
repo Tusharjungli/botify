@@ -22,6 +22,8 @@ from .config import BotConfig
 from .engine import GridEngine
 from .market import BinancePublicPriceFeed, DeterministicPriceFeed, HybridPriceFeed
 
+CONFIG = BotConfig()
+engine = GridEngine(CONFIG)
  codex/create-custom-binance-grid-trading-bot-9b1qhc
 CONFIG = BotConfig()
 engine = GridEngine(CONFIG)
@@ -76,6 +78,7 @@ PAGE = """
     th { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
+    .status-line { min-height: 24px; color: #a8b3c7; }
  codex/create-custom-binance-grid-trading-bot-9b1qhc
     .status-line { min-height: 24px; color: #a8b3c7; }
 
@@ -277,6 +280,8 @@ def tick_dashboard() -> dict:
         if not paused:
             price = price_feed.latest_price()
             engine.on_price(price)
+        snapshot = _snapshot_unlocked()
+    return snapshot
         return _snapshot_unlocked()
 
 
@@ -284,6 +289,8 @@ def control_state() -> dict:
     """Return pause/reset related state without the full trading snapshot."""
 
     with state_lock:
+        state = {"paused": paused, "tick_count": engine.state.tick_count}
+    return state
         return {"paused": paused, "tick_count": engine.state.tick_count}
 
 
@@ -291,6 +298,8 @@ def snapshot_with_controls() -> dict:
     """Return current dashboard state without advancing a tick."""
 
     with state_lock:
+        snapshot = _snapshot_unlocked()
+    return snapshot
         return _snapshot_unlocked()
 
 
@@ -300,6 +309,8 @@ def toggle_pause() -> dict:
     global paused
     with state_lock:
         paused = not paused
+        snapshot = _snapshot_unlocked()
+    return snapshot
         return _snapshot_unlocked()
 
 
@@ -311,6 +322,8 @@ def reset_simulation() -> dict:
         engine = GridEngine(CONFIG)
         paused = False
         last_backtest = None
+        snapshot = _snapshot_unlocked()
+    return snapshot
         return _snapshot_unlocked()
 
 
@@ -327,6 +340,8 @@ def run_quick_backtest(limit: int = 500) -> dict:
     )
     with state_lock:
         last_backtest = _report_dict(report)
+        payload = {"report": last_backtest, "state": _snapshot_unlocked()}
+    return payload
         return {"report": last_backtest, "state": _snapshot_unlocked()}
 
 
