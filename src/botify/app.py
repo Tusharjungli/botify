@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
 from http import HTTPStatus
@@ -73,10 +75,15 @@ PAGE = """
         <button id="pauseButton" onclick="togglePause()">Pause</button>
         <button class="warning" onclick="resetSimulation()">Reset simulation</button>
         <button class="secondary" onclick="runBacktest()">Run quick synthetic backtest</button>
+        <button class="secondary" onclick="exportTrades()">Export trades CSV</button>
       </div>
       <p class="status-line" id="statusLine">Loading dashboard state...</p>
     </section>
     <section class="cards" id="cards"></section>
+    <section>
+      <h2>Trade Diagnostics</h2>
+      <div class="cards" id="diagnostics"></div>
+    </section>
     <section class="panel">
       <h2>BTC Price Chart</h2>
       <p class="note">Shows recent BTC prices, grid range, open entries, targets, and stops. This is still simulation-only.</p>
@@ -110,6 +117,7 @@ PAGE = """
 const money = (n) => Number(n).toLocaleString(undefined, {style: 'currency', currency: 'USD'});
 const num = (n, d=2) => Number(n).toLocaleString(undefined, {maximumFractionDigits: d});
 function pnlClass(n) { return Number(n) >= 0 ? 'good' : 'bad'; }
+function factorClass(n) { return n === null || Number(n) >= 1 ? 'good' : 'bad'; }
 async function postJson(path) {
   const response = await fetch(path, {method: 'POST'});
   if (!response.ok) throw new Error(`${path} failed with ${response.status}`);
@@ -142,6 +150,8 @@ function renderDashboard(data) {
     ['Closed Trades', data.closed_trades, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 
+  renderDiagnostics(data.diagnostics);
+
   document.getElementById('settings').innerHTML = [
     ['Symbol', data.config.symbol],
     ['Starting Balance', money(data.config.starting_balance)],
@@ -167,6 +177,23 @@ function renderDashboard(data) {
 
   drawChart(data.chart);
   if (data.last_backtest) renderBacktest(data.last_backtest);
+}
+function renderDiagnostics(diagnostics) {
+  if (!diagnostics) return;
+  document.getElementById('diagnostics').innerHTML = [
+    ['Open Exposure', money(diagnostics.open_exposure), ''],
+    ['Open Positions', diagnostics.open_positions, ''],
+    ['Long / Short', `${diagnostics.long_positions} / ${diagnostics.short_positions}`, ''],
+    ['Gross Profit', money(diagnostics.gross_profit), 'good'],
+    ['Gross Loss', money(-diagnostics.gross_loss), 'bad'],
+    ['Profit Factor', diagnostics.profit_factor === null ? 'infinite' : num(diagnostics.profit_factor), factorClass(diagnostics.profit_factor)],
+    ['Avg Win', money(diagnostics.average_win), pnlClass(diagnostics.average_win)],
+    ['Avg Loss', money(diagnostics.average_loss), pnlClass(diagnostics.average_loss)],
+    ['Expectancy', money(diagnostics.expectancy), pnlClass(diagnostics.expectancy)],
+    ['Trend Flip Exits', diagnostics.trend_flip_exits, diagnostics.trend_flip_exits ? 'warn' : ''],
+    ['Grid Width', `${num(diagnostics.grid_width_pct)}%`, ''],
+    ['Nearest Target', diagnostics.nearest_target_distance_pct === null ? 'n/a' : `${num(diagnostics.nearest_target_distance_pct)}%`, ''],
+  ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 }
 function drawChart(chart) {
   const canvas = document.getElementById('priceChart');
@@ -266,6 +293,9 @@ async function runBacktest() {
   const data = await postJson('/api/backtest?limit=500');
   renderBacktest(data.report);
 }
+function exportTrades() {
+  window.location.href = '/api/trades.csv';
+}
 refresh();
 setInterval(refresh, 3000);
 </script>
@@ -287,6 +317,8 @@ class BotifyHandler(BaseHTTPRequestHandler):
             self._send_json(snapshot_with_controls())
         elif parsed.path == "/api/control":
             self._send_json(control_state())
+        elif parsed.path == "/api/trades.csv":
+            self._send_csv(trades_csv())
         else:
             self._send_json({"error": "not found"}, status=HTTPStatus.NOT_FOUND)
 
@@ -318,6 +350,15 @@ class BotifyHandler(BaseHTTPRequestHandler):
         encoded = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self._safe_write(encoded)
+
+    def _send_csv(self, body: str) -> None:
+        encoded = body.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", 'attachment; filename="botify_trades.csv"')
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self._safe_write(encoded)
@@ -408,7 +449,75 @@ def _snapshot_unlocked() -> dict:
     snapshot["paused"] = paused
     snapshot["last_backtest"] = last_backtest
     snapshot["chart"] = _chart_payload(snapshot)
+    snapshot["diagnostics"] = _diagnostics_payload(snapshot)
     return snapshot
+
+
+def _diagnostics_payload(snapshot: dict) -> dict:
+    trades = engine.state.trades
+    wins = [trade.pnl for trade in trades if trade.pnl > 0]
+    losses = [trade.pnl for trade in trades if trade.pnl < 0]
+    gross_profit = sum(wins)
+    gross_loss = abs(sum(losses))
+    profit_factor = (
+        math.inf
+        if gross_profit and gross_loss == 0
+        else (gross_profit / gross_loss if gross_loss else 0.0)
+    )
+    positions = snapshot.get("positions", [])
+    price = snapshot.get("price", 0.0)
+    grid = snapshot.get("grid", [])
+    target_distances = [
+        abs(position["target_price"] - price) / price * 100
+        for position in positions
+        if price
+    ]
+    closed_trades = len(trades)
+    expectancy = sum(trade.pnl for trade in trades) / closed_trades if closed_trades else 0.0
+    return {
+        "open_exposure": sum(position["notional"] for position in positions),
+        "open_positions": len(positions),
+        "long_positions": sum(1 for position in positions if position["side"] == "LONG"),
+        "short_positions": sum(1 for position in positions if position["side"] == "SHORT"),
+        "average_win": gross_profit / len(wins) if wins else 0.0,
+        "average_loss": sum(losses) / len(losses) if losses else 0.0,
+        "gross_profit": gross_profit,
+        "gross_loss": gross_loss,
+        "profit_factor": None if math.isinf(profit_factor) else profit_factor,
+        "expectancy": expectancy,
+        "trend_flip_exits": sum(1 for trade in trades if trade.reason == "trend_flip"),
+        "grid_width_pct": ((grid[-1] - grid[0]) / price * 100) if grid and price else 0.0,
+        "nearest_target_distance_pct": min(target_distances) if target_distances else None,
+    }
+
+
+def trades_csv() -> str:
+    with state_lock:
+        trades = list(engine.state.trades)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "side",
+        "entry_price",
+        "exit_price",
+        "quantity",
+        "pnl",
+        "reason",
+        "opened_at",
+        "closed_at",
+    ])
+    for trade in trades:
+        writer.writerow([
+            trade.side,
+            trade.entry_price,
+            trade.exit_price,
+            trade.quantity,
+            trade.pnl,
+            trade.reason,
+            trade.opened_at,
+            trade.closed_at,
+        ])
+    return output.getvalue()
 
 
 def _chart_payload(snapshot: dict) -> dict:

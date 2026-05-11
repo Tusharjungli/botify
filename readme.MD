@@ -74,6 +74,8 @@ The localhost dashboard includes beginner-friendly controls:
 - **Pause / Resume** — stop or continue automatic simulator ticks without closing the server.
 - **Reset simulation** — clear simulated balance changes, open positions, closed trades, and tick history.
 - **Run quick synthetic backtest** — run a 500-candle deterministic backtest directly from the browser.
+- **Trade Diagnostics** — inspect open exposure, long/short split, gross profit/loss, profit factor, expectancy, trend-flip exits, grid width, and nearest target distance.
+- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
 - **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops without external chart libraries.
 
@@ -110,17 +112,17 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 - `POST /api/control/toggle-pause` — pause or resume automatic ticking.
 - `POST /api/control/reset` — reset simulated account state.
 - `POST /api/backtest?limit=500` — run a quick synthetic dashboard backtest.
+- `GET /api/trades.csv` — download simulated closed trades as CSV.
 
 ## Step-by-step roadmap
 
 1. **Local BTC simulator and dashboard** — done.
 2. **BTC backtesting command** — done.
-3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, and price chart** — done.
-4. Add trade/export improvements.
-5. Add paper-trading mode with Binance testnet or a local exchange emulator.
-6. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
-7. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
-8. Only after BTC is stable, consider adding other symbols.
+3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, and CSV export** — done.
+4. Add paper-trading mode with Binance testnet or a local exchange emulator.
+5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
+6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
+7. Only after BTC is stable, consider adding other symbols.
 
 ## Tests
 
