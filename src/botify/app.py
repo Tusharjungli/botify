@@ -58,6 +58,9 @@ PAGE = """
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
     .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
+    .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
+ main
     .status-line { min-height: 24px; color: #a8b3c7; }
     .chart-wrap { position: relative; height: 360px; }
     canvas { width: 100%; height: 100%; border-radius: 14px; background: #08111f; }

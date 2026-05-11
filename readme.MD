@@ -80,6 +80,11 @@ The localhost dashboard includes beginner-friendly controls:
 - **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
 - **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
+- **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, and how much simulated exposure is open.
+- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
+- **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
+- **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
+ main
 
 These controls are still simulation-only. They do not connect private Binance API keys and do not place live orders.
 
@@ -122,6 +127,9 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 2. **BTC backtesting command** — done.
 3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
 4. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
+3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, and CSV export** — done.
+4. Add paper-trading mode with Binance testnet or a local exchange emulator.
+ main
 5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
 6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
 7. Only after BTC is stable, consider adding other symbols.
