@@ -1,16 +1,131 @@
-# Crypto Trading Bot
+# Botify
 
-This project is a custom trading bot to replace Binance built-in bots.
+Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a **safe localhost simulator and backtester**: it shows real-time BTC grid behavior, risk limits, open positions, and simulated PnL without connecting private Binance API keys or placing live orders.
 
-## Features (planned)
-- Strategy-based trading
-- Risk management
-- Logging
-- Backtesting (future)
+> Risk note: crypto futures trading can lose money quickly. This repository starts with simulation and backtesting only so the strategy, dashboard, and guardrails can be tested before any live Binance integration.
 
-## Stack
-- Python
-- Binance API
+## Current status
 
-## Status
-🚧 In development
+- ✅ BTC-only simulator dashboard for `BTCUSDT`.
+- ✅ Public Binance BTC price feed with deterministic offline fallback.
+- ✅ Simulated balance, realized PnL, unrealized PnL, win rate, open positions, and recent trades.
+- ✅ Moderate-risk defaults: low per-order risk, max open positions, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
+- ✅ Beginner-friendly BTC backtest command.
+- ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, and BTC price chart.
+- ❌ No private Binance API keys yet.
+- ❌ No live orders yet.
+
+## Why the first step is simulation
+
+Binance Futures Grid automates buy/sell orders at preset intervals inside a configured range and supports auto/manual parameters and leverage. Botify keeps those grid ideas but adds local transparency and custom controls before live trading.
+
+## Install
+
+Create and activate a virtual environment, then install requirements.
+
+### Mac/Linux/Git Bash
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Windows PowerShell
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+## Run the localhost dashboard
+
+### Mac/Linux/Git Bash
+
+```bash
+PYTHONPATH=src python src/main.py
+```
+
+### Windows PowerShell
+
+```powershell
+$env:PYTHONPATH="src"
+python src/main.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5000
+```
+
+You can also run the compatibility launcher:
+
+```bash
+PYTHONPATH=. python bot.py
+```
+
+
+## Dashboard controls
+
+The localhost dashboard includes beginner-friendly controls:
+
+- **Pause / Resume** — stop or continue automatic simulator ticks without closing the server.
+- **Reset simulation** — clear simulated balance changes, open positions, closed trades, and tick history.
+- **Run quick synthetic backtest** — run a 500-candle deterministic backtest directly from the browser.
+- **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
+- **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops without external chart libraries.
+- **Trade Diagnostics** — summarize open exposure, long/short counts, average win/loss, gross profit/loss, profit factor, grid width, and nearest target distance.
+- **Export trades CSV** — download simulated closed trades for spreadsheet review.
+
+These controls are still simulation-only. They do not connect private Binance API keys and do not place live orders.
+
+## Run a BTC backtest
+
+After the dashboard works, run a historical/synthetic BTC backtest from the terminal:
+
+```bash
+PYTHONPATH=src python -m botify.backtest
+```
+
+By default, Botify tries public Binance `BTCUSDT` 5-minute candles and automatically falls back to deterministic synthetic prices if Binance is unavailable.
+
+Useful examples:
+
+```bash
+# Force synthetic data so the command works offline
+PYTHONPATH=src python -m botify.backtest --source synthetic --limit 500
+
+# Try public Binance candles with a different interval
+PYTHONPATH=src python -m botify.backtest --source binance --interval 15m --limit 1000
+```
+
+The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries.
+
+## API endpoints
+
+- `GET /` — dashboard.
+- `GET /api/tick` — fetch one BTC price tick, advance the simulator, and return JSON state.
+- `GET /api/state` — return current JSON state without advancing the simulator.
+- `GET /api/control` — return pause status and tick count.
+- `POST /api/control/toggle-pause` — pause or resume automatic ticking.
+- `POST /api/control/reset` — reset simulated account state.
+- `POST /api/backtest?limit=500` — run a quick synthetic dashboard backtest.
+- `GET /api/trades.csv` — download simulated closed trades as CSV.
+
+## Step-by-step roadmap
+
+1. **Local BTC simulator and dashboard** — done.
+2. **BTC backtesting command** — done.
+3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, and CSV export** — done.
+4. Add paper-trading mode with Binance testnet or a local exchange emulator.
+5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
+6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
+7. Only after BTC is stable, consider adding other symbols.
+
+## Tests
+
+```bash
+PYTHONPATH=src pytest
+```
