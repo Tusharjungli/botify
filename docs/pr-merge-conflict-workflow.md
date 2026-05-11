@@ -75,3 +75,40 @@ Then open a new PR from `clean-feature-branch` and close the old conflicted PR.
 - Do not branch a new PR from another PR branch unless you intentionally want a stacked PR.
 - Rebase on `origin/main` before pushing PR updates.
 - Resolve conflicts locally and run tests before pushing.
+
+## Button choice for diagnostics and CSV export conflicts
+
+When the conflict header says the current side is the Botify feature branch and the incoming side is `main`, use this rule for the diagnostics/CSV export PR:
+
+- Click **Accept Current Change** for README conflicts that mention **Trade Diagnostics**, **Export trades CSV**, `GET /api/trades.csv`, or the roadmap line with diagnostics and CSV export.
+- Click **Accept Current Change** for `src/botify/app.py` conflicts that add `csv`, `io`, `exportTrades()`, `Trade Diagnostics`, `factorClass()`, `renderDiagnostics(...)`, `/api/trades.csv`, `_send_csv(...)`, `_diagnostics_payload(...)`, or `trades_csv()`.
+- Click **Accept Current Change** for `tests/test_app.py` conflicts that add `from botify.engine import Trade` or the diagnostics/CSV export test.
+- Do **not** click **Accept Both Changes** for these conflicts. It can duplicate imports, UI blocks, routes, tests, or roadmap bullets.
+- Do **not** click **Accept Incoming Change** unless you intentionally want to remove the diagnostics and CSV export feature.
+
+After accepting the current side for these conflicts, save the files and run:
+
+```bash
+git add readme.MD src/botify/app.py tests/test_app.py
+PYTHONPATH=src pytest
+git diff --check
+CONFLICT_PATTERN='<{7}|={7}|>{7}'
+rg -n "$CONFLICT_PATTERN" readme.MD src/botify/app.py tests/test_app.py
+git status
+```
+
+If the tests pass and `rg` prints no conflict markers, complete the merge or rebase:
+
+```bash
+# If Git says you are rebasing:
+git rebase --continue
+
+# If Git says all conflicts are fixed but you are merging:
+git commit
+```
+
+Then push the resolved branch:
+
+```bash
+git push --force-with-lease origin HEAD
+```
