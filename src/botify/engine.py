@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from statistics import mean
 
 from .config import BotConfig
+from .exchange import Order, PaperExchange
 
 
 @dataclass
@@ -61,6 +62,7 @@ class BotState:
     mode: str = "WARMING_UP"
     last_price: float | None = None
     realized_pnl: float = 0.0
+    exchange: PaperExchange = field(default_factory=PaperExchange)
 
 
 class GridEngine:
@@ -92,6 +94,7 @@ class GridEngine:
 
         self._refresh_grid(price)
         state.mode = self._detect_mode()
+        self._open_positions_from_fills(state.exchange.process_price(price))
         self._update_risk_lock(price)
         self._close_positions(price)
         if state.trading_enabled:
@@ -117,6 +120,9 @@ class GridEngine:
             "lock_reason": self.state.lock_reason,
             "grid": self.state.grid,
             "positions": [asdict(position) | {"unrealized_pnl": position.unrealized_pnl(price)} for position in self.state.positions],
+            "open_orders": [order.to_dict() for order in self.state.exchange.open_orders()],
+            "recent_fills": [order.to_dict() for order in self.state.exchange.recent_fills()],
+            "canceled_orders": [order.to_dict() for order in self.state.exchange.recent_canceled()],
             "trades": [asdict(trade) for trade in self.state.trades[-30:]][::-1],
             "tick_count": self.state.tick_count,
             "win_rate": (wins / closed * 100) if closed else 0.0,
@@ -182,40 +188,67 @@ class GridEngine:
         else:
             allowed_side = "SHORT"
 
-        nearby_exists = any(abs(position.entry_price - price) < step * 0.55 for position in self.state.positions)
-        if nearby_exists:
+        nearby_position_exists = any(abs(position.entry_price - price) < step * 0.55 for position in self.state.positions)
+        nearby_order_exists = any(abs(order.price - price) < step * 0.55 for order in self.state.exchange.open_orders())
+        if nearby_position_exists or nearby_order_exists:
             return
 
         margin = self.state.balance * self.config.base_order_risk_pct
         notional = margin * self.config.leverage
-        fee = notional * self.config.taker_fee_pct
-        if self.state.balance <= fee or notional <= 0:
+        if notional <= 0:
             return
 
-        quantity = notional / price
-        if allowed_side == "LONG":
-            target = price + step * self.config.take_profit_grid_steps
-            stop = price * (1 - self.config.stop_loss_pct)
-        else:
-            target = price - step * self.config.take_profit_grid_steps
-            stop = price * (1 + self.config.stop_loss_pct)
-
-        self.state.balance -= fee
-        self.state.positions.append(
-            Position(
-                side=allowed_side,
-                entry_price=price,
-                notional=notional,
-                quantity=quantity,
-                opened_at=_now(),
-                target_price=target,
-                stop_price=stop,
-                peak_price=price,
-                trough_price=price,
-                grid_index=index,
-            )
+        order_price = grid[index]
+        quantity = notional / order_price
+        self.state.exchange.submit_limit_order(
+            side="BUY" if allowed_side == "LONG" else "SELL",
+            price=order_price,
+            quantity=quantity,
+            tag=f"grid_entry:{allowed_side}",
+            grid_index=index,
         )
         self.state.cooldown_until_tick = self.state.tick_count + self.config.cooldown_ticks
+
+    def _open_positions_from_fills(self, filled_orders: list[Order]) -> None:
+        if not filled_orders or len(self.state.grid) < 2:
+            return
+
+        step = self.state.grid[1] - self.state.grid[0]
+        for order in filled_orders:
+            if order.reduce_only or not order.tag.startswith("grid_entry"):
+                continue
+            if len(self.state.positions) >= self.config.max_open_positions:
+                continue
+
+            side = "LONG" if order.side == "BUY" else "SHORT"
+            entry_price = order.average_fill_price or order.price
+            notional = order.notional
+            fee = notional * self.config.maker_fee_pct
+            if self.state.balance <= fee:
+                continue
+
+            if side == "LONG":
+                target = entry_price + step * self.config.take_profit_grid_steps
+                stop = entry_price * (1 - self.config.stop_loss_pct)
+            else:
+                target = entry_price - step * self.config.take_profit_grid_steps
+                stop = entry_price * (1 + self.config.stop_loss_pct)
+
+            self.state.balance -= fee
+            self.state.positions.append(
+                Position(
+                    side=side,
+                    entry_price=entry_price,
+                    notional=notional,
+                    quantity=order.quantity,
+                    opened_at=order.filled_at or _now(),
+                    target_price=target,
+                    stop_price=stop,
+                    peak_price=entry_price,
+                    trough_price=entry_price,
+                    grid_index=order.grid_index or 0,
+                )
+            )
 
     def _close_positions(self, price: float) -> None:
         still_open: list[Position] = []

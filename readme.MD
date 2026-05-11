@@ -8,7 +8,7 @@ Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a
 
 - ✅ BTC-only simulator dashboard for `BTCUSDT`.
 - ✅ Public Binance BTC price feed with deterministic offline fallback.
-- ✅ Simulated balance, realized PnL, unrealized PnL, win rate, open positions, and recent trades.
+- ✅ Simulated balance, realized PnL, unrealized PnL, win rate, paper orders, fills, open positions, and recent trades.
 - ✅ Moderate-risk defaults: low per-order risk, max open positions, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
 - ✅ Beginner-friendly BTC backtest command.
 - ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, and BTC price chart.
@@ -75,16 +75,16 @@ The localhost dashboard includes beginner-friendly controls:
 - **Reset simulation** — clear simulated balance changes, open positions, closed trades, and tick history.
 - **Run quick synthetic backtest** — run a 500-candle deterministic backtest directly from the browser.
 - **Trade Diagnostics** — inspect open exposure, long/short split, gross profit/loss, profit factor, expectancy, trend-flip exits, grid width, and nearest target distance.
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
+- **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, and how much simulated exposure is open.
+- **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions.
+- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
+- **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
+- **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
 - **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, and how much simulated exposure is open.
 - **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
 - **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
-=======
-- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
-- **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
-- **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops without external chart libraries.
->>>>>>> main
+ main
 
 These controls are still simulation-only. They do not connect private Binance API keys and do not place live orders.
 
@@ -114,7 +114,7 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 
 - `GET /` — dashboard.
 - `GET /api/tick` — fetch one BTC price tick, advance the simulator, and return JSON state.
-- `GET /api/state` — return current JSON state without advancing the simulator.
+- `GET /api/state` — return current JSON state without advancing the simulator, including paper orders and fills.
 - `GET /api/control` — return pause status and tick count.
 - `POST /api/control/toggle-pause` — pause or resume automatic ticking.
 - `POST /api/control/reset` — reset simulated account state.
@@ -125,12 +125,11 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 
 1. **Local BTC simulator and dashboard** — done.
 2. **BTC backtesting command** — done.
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
+3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
+4. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
 3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, and CSV export** — done.
-=======
-3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, and CSV export** — done.
->>>>>>> main
 4. Add paper-trading mode with Binance testnet or a local exchange emulator.
+ main
 5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
 6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
 7. Only after BTC is stable, consider adding other symbols.

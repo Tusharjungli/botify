@@ -36,3 +36,22 @@ def test_daily_loss_lock_disables_new_entries():
 
     assert snapshot["trading_enabled"] is False
     assert "Daily max loss" in snapshot["lock_reason"]
+
+
+def test_engine_routes_entries_through_paper_exchange_orders():
+    engine = GridEngine(BotConfig(cooldown_ticks=1))
+    for _ in range(21):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    assert snapshot["mode"] == "RANGE"
+    assert snapshot["positions"] == []
+    assert len(snapshot["open_orders"]) == 1
+    assert snapshot["open_orders"][0]["status"] == "NEW"
+
+    engine.on_price(100_000)
+    snapshot = engine.snapshot()
+
+    assert len(snapshot["recent_fills"]) == 1
+    assert len(snapshot["positions"]) == 1
+    assert snapshot["positions"][0]["side"] == "SHORT"

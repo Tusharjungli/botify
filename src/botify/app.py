@@ -56,11 +56,11 @@ PAGE = """
     th { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
     .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
-=======
->>>>>>> main
+    .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
+ main
     .status-line { min-height: 24px; color: #a8b3c7; }
     .chart-wrap { position: relative; height: 360px; }
     canvas { width: 100%; height: 100%; border-radius: 14px; background: #08111f; }
@@ -112,6 +112,14 @@ PAGE = """
     <section>
       <h2>Quick Backtest Result</h2>
       <div class="cards" id="backtestCards"><article class="card"><div class="label">Status</div><div class="small-value">Click “Run quick synthetic backtest”.</div></article></div>
+    </section>
+    <section>
+      <h2>Open Paper Orders</h2>
+      <table><thead><tr><th>ID</th><th>Side</th><th>Limit</th><th>Qty</th><th>Notional</th><th>Tag</th></tr></thead><tbody id="orders"></tbody></table>
+    </section>
+    <section>
+      <h2>Recent Paper Fills</h2>
+      <table><thead><tr><th>ID</th><th>Side</th><th>Limit</th><th>Fill</th><th>Qty</th><th>Filled</th></tr></thead><tbody id="fills"></tbody></table>
     </section>
     <section>
       <h2>Open Positions</h2>
@@ -176,6 +184,14 @@ function renderDashboard(data) {
     ['Trailing Stop', `${num(data.config.trailing_stop_pct * 100)}%`],
     ['Min Grid Profit', `${num(data.config.min_grid_profit_pct * 100)}%`],
   ].map(([label, value]) => `<article class="card"><div class="label">${label}</div><div class="small-value">${value}</div></article>`).join('');
+
+  document.getElementById('orders').innerHTML = data.open_orders.length ? data.open_orders.map(o => `
+    <tr><td>${o.order_id}</td><td>${o.side}</td><td>${money(o.price)}</td><td>${num(o.quantity, 6)}</td><td>${money(o.notional)}</td><td>${o.tag}</td></tr>
+  `).join('') : '<tr><td colspan="6">No open paper orders.</td></tr>';
+
+  document.getElementById('fills').innerHTML = data.recent_fills.length ? data.recent_fills.map(o => `
+    <tr><td>${o.order_id}</td><td>${o.side}</td><td>${money(o.price)}</td><td>${money(o.average_fill_price || o.price)}</td><td>${num(o.quantity, 6)}</td><td>${o.filled_at}</td></tr>
+  `).join('') : '<tr><td colspan="6">No filled paper orders yet.</td></tr>';
 
   document.getElementById('positions').innerHTML = data.positions.length ? data.positions.map(p => `
     <tr><td>${p.side}</td><td>${money(p.entry_price)}</td><td>${money(p.target_price)}</td><td>${money(p.stop_price)}</td><td>${num(p.quantity, 6)}</td><td class="${pnlClass(p.unrealized_pnl)}">${money(p.unrealized_pnl)}</td></tr>
