@@ -253,3 +253,39 @@ git push --force-with-lease origin HEAD
 ```
 
 Then refresh the GitHub PR page. The branch in VS Code and GitHub will match after the push finishes successfully.
+
+## Button choice for paper exchange lifecycle conflicts
+
+When GitHub shows conflicts for the paper-exchange lifecycle PR and the conflict header says the current side is the Botify feature branch while the incoming side is `main`, use this rule:
+
+- Click **Accept Current Change** for `docs/pr-merge-conflict-workflow.md` conflicts that mention paper exchange, app conflict marker fixes, pytest conflict marker fixes, diagnostics, CSV export, or run review.
+- Click **Accept Current Change** for `readme.MD` conflicts that mention paper orders, fills, paper order lifecycle, richer local exchange emulator, or `/api/state` including paper orders and fills.
+- Click **Accept Current Change** for `src/botify/app.py` conflicts that add **Open Paper Orders**, **Recent Paper Fills**, `orders`, `fills`, `open_orders`, `recent_fills`, or `canceled_orders` to the dashboard.
+- Click **Accept Current Change** for `src/botify/engine.py` conflicts that add `PaperExchange`, `Order`, `exchange`, `process_price`, `_open_positions_from_fills(...)`, `open_orders`, `recent_fills`, or `canceled_orders`.
+- Click **Accept Current Change** for `tests/test_engine.py` conflicts that add `test_engine_routes_entries_through_paper_exchange_orders` or assertions for `open_orders` / `recent_fills`.
+- Do **not** click **Accept Both Changes** for these conflicts. It can duplicate dashboard sections, snapshot fields, exchange fill logic, or tests.
+- Do **not** click **Accept Incoming Change** unless you intentionally want to remove the paper-exchange lifecycle feature.
+
+After accepting the current side for these conflicts, save the files and run:
+
+```bash
+git add docs/pr-merge-conflict-workflow.md readme.MD src/botify/app.py src/botify/engine.py tests/test_engine.py
+PYTHONPATH=src pytest
+git diff --check
+CONFLICT_PATTERN='<{7}|={7}|>{7}'
+rg -n "$CONFLICT_PATTERN" docs/pr-merge-conflict-workflow.md readme.MD src/botify/app.py src/botify/engine.py tests/test_engine.py
+git status
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"
+git add docs/pr-merge-conflict-workflow.md readme.MD src/botify/app.py src/botify/engine.py tests/test_engine.py
+pytest
+git diff --check
+rg -n '<<<<<<<|=======|>>>>>>>' docs/pr-merge-conflict-workflow.md readme.MD src/botify/app.py src/botify/engine.py tests/test_engine.py
+git status
+```
+
+If tests pass and `rg` prints nothing, finish the merge or rebase, then push with `git push --force-with-lease origin HEAD`.
