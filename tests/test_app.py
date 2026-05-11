@@ -73,7 +73,10 @@ def test_diagnostics_and_csv_export_include_trade_data():
 
     snapshot = app.snapshot_with_controls()
     diagnostics = snapshot["diagnostics"]
+<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
     review_notes = snapshot["review_notes"]
+=======
+>>>>>>> main
     csv_body = app.trades_csv()
 
     assert diagnostics["gross_profit"] == 1.0
@@ -81,8 +84,11 @@ def test_diagnostics_and_csv_export_include_trade_data():
     assert diagnostics["profit_factor"] == 2.0
     assert diagnostics["expectancy"] == 0.25
     assert diagnostics["trend_flip_exits"] == 1
+<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
     assert any(note["label"] == "Small sample" for note in review_notes)
     assert any(note["label"] == "Exposure" for note in review_notes)
+=======
+>>>>>>> main
     assert "side,entry_price,exit_price,quantity,pnl,reason,opened_at,closed_at" in csv_body
     assert "LONG,80000,80100,0.01,1.0,target" in csv_body
     assert "SHORT,80200,80250,0.01,-0.5,trend_flip" in csv_body
