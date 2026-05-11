@@ -90,13 +90,10 @@ PAGE = """
       <div class="cards" id="diagnostics"></div>
     </section>
     <section class="panel">
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
       <h2>Run Review</h2>
       <ul class="review-list" id="reviewNotes"><li>Collecting run notes...</li></ul>
     </section>
     <section class="panel">
-=======
->>>>>>> main
       <h2>BTC Price Chart</h2>
       <p class="note">Shows recent BTC prices, grid range, open entries, targets, and stops. This is still simulation-only.</p>
       <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
@@ -163,10 +160,7 @@ function renderDashboard(data) {
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 
   renderDiagnostics(data.diagnostics);
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
   renderReviewNotes(data.review_notes);
-=======
->>>>>>> main
 
   document.getElementById('settings').innerHTML = [
     ['Symbol', data.config.symbol],
@@ -211,15 +205,12 @@ function renderDiagnostics(diagnostics) {
     ['Nearest Target', diagnostics.nearest_target_distance_pct === null ? 'n/a' : `${num(diagnostics.nearest_target_distance_pct)}%`, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 }
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
 function renderReviewNotes(notes) {
   const items = notes && notes.length ? notes : [{label: 'Waiting', message: 'Collecting enough ticks and trades for review.', level: ''}];
   document.getElementById('reviewNotes').innerHTML = items.map(note =>
     `<li><strong class="${note.level}">${note.label}</strong> — ${note.message}</li>`
   ).join('');
 }
-=======
->>>>>>> main
 function drawChart(chart) {
   const canvas = document.getElementById('priceChart');
   const ctx = canvas.getContext('2d');
@@ -266,7 +257,6 @@ function drawChart(chart) {
     ctx.fillText(money(price), 8, yy + 4);
   }
 
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
   const labelSlots = [];
   function nextLabelY(yy) {
     let labelY = Math.max(pad.top + 10, Math.min(height - pad.bottom - 6, yy - 5));
@@ -278,14 +268,10 @@ function drawChart(chart) {
     return labelY;
   }
   function horizontal(price, color, label, dash = [], stackLabel = false) {
-=======
-  function horizontal(price, color, label, dash = []) {
->>>>>>> main
     if (!Number.isFinite(price)) return;
     const yy = y(price);
     ctx.save(); ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(width - pad.right, yy); ctx.stroke(); ctx.restore();
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
     const labelY = stackLabel ? nextLabelY(yy) : yy - 5;
     ctx.font = '12px Inter, Arial';
     ctx.fillStyle = '#08111fcc';
@@ -295,13 +281,6 @@ function drawChart(chart) {
   horizontal(chart.grid_lower, '#64748b', 'grid low', [6, 6]);
   horizontal(chart.grid_upper, '#64748b', 'grid high', [6, 6]);
   markers.forEach(m => horizontal(m.price, m.color, m.label, [3, 5], true));
-=======
-    ctx.fillStyle = color; ctx.font = '12px Inter, Arial'; ctx.fillText(label, pad.left + 8, yy - 5);
-  }
-  horizontal(chart.grid_lower, '#64748b', 'grid low', [6, 6]);
-  horizontal(chart.grid_upper, '#64748b', 'grid high', [6, 6]);
-  markers.forEach(m => horizontal(m.price, m.color, m.label, [3, 5]));
->>>>>>> main
 
   const grad = ctx.createLinearGradient(0, pad.top, 0, height - pad.bottom);
   grad.addColorStop(0, '#38bdf844'); grad.addColorStop(1, '#38bdf800');
@@ -501,10 +480,7 @@ def _snapshot_unlocked() -> dict:
     snapshot["last_backtest"] = last_backtest
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
-=======
->>>>>>> main
     return snapshot
 
 
@@ -546,7 +522,6 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     }
 
 
-<<<<<<< codex/create-custom-binance-grid-trading-bot-xfqu3s
 def _review_notes_payload(snapshot: dict, diagnostics: dict) -> list[dict[str, str]]:
     notes = []
     closed_trades = snapshot.get("closed_trades", 0)
@@ -598,8 +573,6 @@ def _review_notes_payload(snapshot: dict, diagnostics: dict) -> list[dict[str, s
     return notes
 
 
-=======
->>>>>>> main
 def trades_csv() -> str:
     with state_lock:
         trades = list(engine.state.trades)
