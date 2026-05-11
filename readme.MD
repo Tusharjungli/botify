@@ -73,6 +73,8 @@ The localhost dashboard includes beginner-friendly controls:
 
 - **Pause / Resume** — stop or continue automatic simulator ticks without closing the server.
 - **Reset simulation** — clear simulated balance changes, open positions, closed trades, and tick history.
+- **Cancel paper orders** — cancel all pending local paper orders without closing simulated positions.
+- **Emergency stop** — cancel pending paper orders and lock new simulated entries until reset.
 - **Run quick synthetic backtest** — run a 500-candle deterministic backtest directly from the browser.
 - **Trade Diagnostics** — inspect open exposure, long/short split, gross profit/loss, profit factor, expectancy, trend-flip exits, grid width, and nearest target distance.
 - **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, and how much simulated exposure is open.
@@ -80,11 +82,6 @@ The localhost dashboard includes beginner-friendly controls:
 - **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
 - **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
-- **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, and how much simulated exposure is open.
-- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
-- **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, and daily lock settings.
-- **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
- main
 
 These controls are still simulation-only. They do not connect private Binance API keys and do not place live orders.
 
@@ -118,6 +115,8 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 - `GET /api/control` — return pause status and tick count.
 - `POST /api/control/toggle-pause` — pause or resume automatic ticking.
 - `POST /api/control/reset` — reset simulated account state.
+- `POST /api/control/cancel-orders` — cancel all open local paper orders.
+- `POST /api/control/emergency-stop` — cancel open paper orders and disable new simulated entries.
 - `POST /api/backtest?limit=500` — run a quick synthetic dashboard backtest.
 - `GET /api/trades.csv` — download simulated closed trades as CSV.
 
@@ -125,11 +124,8 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 
 1. **Local BTC simulator and dashboard** — done.
 2. **BTC backtesting command** — done.
-3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
+3. **Dashboard controls: pause/resume, reset, cancel orders, emergency stop, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
 4. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
-3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, and CSV export** — done.
-4. Add paper-trading mode with Binance testnet or a local exchange emulator.
- main
 5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
 6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
 7. Only after BTC is stable, consider adding other symbols.

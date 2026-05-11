@@ -58,9 +58,6 @@ PAGE = """
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
     .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
-    .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-    .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
- main
     .status-line { min-height: 24px; color: #a8b3c7; }
     .chart-wrap { position: relative; height: 360px; }
     canvas { width: 100%; height: 100%; border-radius: 14px; background: #08111f; }
@@ -80,6 +77,8 @@ PAGE = """
         <button id="pauseButton" onclick="togglePause()">Pause</button>
         <button class="warning" onclick="resetSimulation()">Reset simulation</button>
         <button class="secondary" onclick="runBacktest()">Run quick synthetic backtest</button>
+        <button class="secondary" onclick="cancelPaperOrders()">Cancel paper orders</button>
+        <button class="warning" onclick="emergencyStop()">Emergency stop</button>
         <button class="secondary" onclick="exportTrades()">Export trades CSV</button>
       </div>
       <p class="status-line" id="statusLine">Loading dashboard state...</p>
@@ -149,9 +148,10 @@ async function refresh() {
 }
 function renderDashboard(data) {
   document.getElementById('pauseButton').textContent = data.paused ? 'Resume' : 'Pause';
-  document.getElementById('statusLine').textContent = data.paused
+  const statusText = data.paused
     ? 'Paused: Botify is not advancing new price ticks. Click Resume to continue.'
     : 'Running: Botify advances one simulated tick every refresh. No live orders are placed.';
+  document.getElementById('statusLine').textContent = data.control_message ? `${data.control_message} ${statusText}` : statusText;
   document.getElementById('cards').innerHTML = [
     ['BTC Price', money(data.price), ''],
     ['Price Source', `<span class="pill">${data.price_source}</span>`, ''],
@@ -339,6 +339,16 @@ async function runBacktest() {
   const data = await postJson('/api/backtest?limit=500');
   renderBacktest(data.report);
 }
+async function cancelPaperOrders() {
+  if (!confirm('Cancel all open paper orders? Open positions are unchanged.')) return;
+  const data = await postJson('/api/control/cancel-orders');
+  renderDashboard(data);
+}
+async function emergencyStop() {
+  if (!confirm('Emergency stop will cancel open paper orders and disable new entries. Continue?')) return;
+  const data = await postJson('/api/control/emergency-stop');
+  renderDashboard(data);
+}
 function exportTrades() {
   window.location.href = '/api/trades.csv';
 }
@@ -374,6 +384,10 @@ class BotifyHandler(BaseHTTPRequestHandler):
             self._send_json(toggle_pause())
         elif parsed.path == "/api/control/reset":
             self._send_json(reset_simulation())
+        elif parsed.path == "/api/control/cancel-orders":
+            self._send_json(cancel_paper_orders())
+        elif parsed.path == "/api/control/emergency-stop":
+            self._send_json(emergency_stop())
         elif parsed.path == "/api/backtest":
             query = parse_qs(parsed.query)
             limit = int(query.get("limit", ["500"])[0])
@@ -462,6 +476,26 @@ def reset_simulation() -> dict:
         paused = False
         last_backtest = None
         snapshot = _snapshot_unlocked()
+    return snapshot
+
+
+def cancel_paper_orders() -> dict:
+    """Cancel all open local paper orders without closing positions."""
+
+    with state_lock:
+        canceled = engine.cancel_open_orders()
+        snapshot = _snapshot_unlocked()
+    snapshot["control_message"] = f"Canceled {canceled} open paper order(s)."
+    return snapshot
+
+
+def emergency_stop() -> dict:
+    """Cancel open paper orders and disable new simulated entries."""
+
+    with state_lock:
+        canceled = engine.emergency_stop()
+        snapshot = _snapshot_unlocked()
+    snapshot["control_message"] = f"Emergency stop active. Canceled {canceled} open paper order(s)."
     return snapshot
 
 

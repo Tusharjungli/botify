@@ -86,3 +86,22 @@ def test_diagnostics_and_csv_export_include_trade_data():
     assert "side,entry_price,exit_price,quantity,pnl,reason,opened_at,closed_at" in csv_body
     assert "LONG,80000,80100,0.01,1.0,target" in csv_body
     assert "SHORT,80200,80250,0.01,-0.5,trend_flip" in csv_body
+
+
+def test_cancel_orders_and_emergency_stop_controls():
+    app.reset_simulation()
+    app.engine.state.exchange.submit_limit_order(side="BUY", price=80_000, quantity=0.01)
+    assert len(app.snapshot_with_controls()["open_orders"]) == 1
+
+    cancel_snapshot = app.cancel_paper_orders()
+    assert cancel_snapshot["open_orders"] == []
+    assert "Canceled 1" in cancel_snapshot["control_message"]
+    assert app.engine.state.exchange.recent_canceled()[0].status == "CANCELED"
+
+    app.engine.state.exchange.submit_limit_order(side="SELL", price=81_000, quantity=0.01)
+    stop_snapshot = app.emergency_stop()
+
+    assert stop_snapshot["trading_enabled"] is False
+    assert "Manual emergency stop" in stop_snapshot["lock_reason"]
+    assert stop_snapshot["open_orders"] == []
+    assert "Emergency stop active" in stop_snapshot["control_message"]

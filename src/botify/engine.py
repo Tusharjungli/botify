@@ -250,6 +250,18 @@ class GridEngine:
                 )
             )
 
+    def cancel_open_orders(self) -> int:
+        """Cancel all currently open paper-exchange orders."""
+
+        return self.state.exchange.cancel_all()
+
+    def emergency_stop(self) -> int:
+        """Disable new entries and cancel all open paper orders."""
+
+        self.state.trading_enabled = False
+        self.state.lock_reason = "Manual emergency stop; new entries disabled."
+        return self.cancel_open_orders()
+
     def _close_positions(self, price: float) -> None:
         still_open: list[Position] = []
         for position in self.state.positions:

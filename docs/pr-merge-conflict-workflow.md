@@ -289,3 +289,21 @@ git status
 ```
 
 If tests pass and `rg` prints nothing, finish the merge or rebase, then push with `git push --force-with-lease origin HEAD`.
+
+## GitHub shows 0 conflicts but Mark as resolved is disabled
+
+GitHub's web editor can show `0 conflicts` for the current view while the file still has unresolved marker lines lower in the file. If **Mark as resolved** is disabled and a file in the left sidebar is not green, scroll through the whole file and remove any remaining marker lines manually.
+
+For the README roadmap conflict, keep only one roadmap block. The resolved section should be:
+
+```markdown
+1. **Local BTC simulator and dashboard** — done.
+2. **BTC backtesting command** — done.
+3. **Dashboard controls: pause/resume, reset, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
+4. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
+5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
+6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
+7. Only after BTC is stable, consider adding other symbols.
+```
+
+Delete the duplicate incoming roadmap block and delete the marker lines. After saving, the left sidebar item should turn green and GitHub should enable **Mark as resolved**.

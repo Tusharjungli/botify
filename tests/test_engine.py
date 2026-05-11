@@ -55,3 +55,18 @@ def test_engine_routes_entries_through_paper_exchange_orders():
     assert len(snapshot["recent_fills"]) == 1
     assert len(snapshot["positions"]) == 1
     assert snapshot["positions"][0]["side"] == "SHORT"
+
+
+def test_emergency_stop_cancels_orders_and_locks_entries():
+    engine = GridEngine(BotConfig(cooldown_ticks=1))
+    engine.state.exchange.submit_limit_order(side="BUY", price=99_000, quantity=0.01)
+
+    canceled = engine.emergency_stop()
+    engine.on_price(100_000)
+    snapshot = engine.snapshot()
+
+    assert canceled == 1
+    assert snapshot["trading_enabled"] is False
+    assert "Manual emergency stop" in snapshot["lock_reason"]
+    assert snapshot["open_orders"] == []
+    assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
