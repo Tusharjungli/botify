@@ -642,10 +642,7 @@ def _snapshot_unlocked() -> dict:
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
     snapshot["readiness"] = _readiness_payload(snapshot, snapshot["diagnostics"])
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
     snapshot["profit_stage"] = _profit_stage_payload(snapshot, snapshot["diagnostics"])
-=======
->>>>>>> main
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
     return snapshot
 
@@ -703,7 +700,6 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     }
 
 
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
 def _profit_stage_payload(snapshot: dict, diagnostics: dict) -> dict:
     config = snapshot.get("config", {})
     positions = snapshot.get("positions", [])
@@ -786,8 +782,6 @@ def _profit_backtest_message(last_report: dict | None) -> str:
         f"PF {last_report.get('profit_factor') or 'n/a'}."
     )
 
-=======
->>>>>>> main
 def _readiness_payload(snapshot: dict, diagnostics: dict) -> dict:
     config = snapshot.get("config", {})
     grid_plan = snapshot.get("grid_plan", {})
