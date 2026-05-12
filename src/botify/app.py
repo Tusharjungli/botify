@@ -198,6 +198,7 @@ function renderDashboard(data) {
   renderSafetyGuardrails(data);
   renderReadiness(data.readiness);
   renderProfitStage(data.profit_stage);
+  renderProfitStage(data.profit_stage);
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
 
@@ -243,6 +244,7 @@ function renderSafetyGuardrails(data) {
   const plan = data.grid_plan || {};
   const diagnostics = data.diagnostics || {};
   const exchange = data.exchange || {};
+  const exchange = data.exchange || {};
   const capClass = diagnostics.committed_notional_pct > 20 ? 'warn' : 'good';
   const cards = [
     [
@@ -266,6 +268,8 @@ function renderSafetyGuardrails(data) {
     ['Stale Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`, ''],
     ['Spike Guard', `${num(data.config.max_tick_jump_pct * 100)}% / tick`, ''],
     ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`, ''],
+    ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
+    ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
     ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
     ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
   ];
@@ -630,6 +634,7 @@ def _snapshot_unlocked() -> dict:
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
     snapshot["readiness"] = _readiness_payload(snapshot, snapshot["diagnostics"])
+    snapshot["profit_stage"] = _profit_stage_payload(snapshot, snapshot["diagnostics"])
     snapshot["profit_stage"] = _profit_stage_payload(snapshot, snapshot["diagnostics"])
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
     return snapshot
