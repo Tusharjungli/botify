@@ -95,14 +95,11 @@ PAGE = """
       <p class="note" id="readinessSummary">Waiting for readiness checks...</p>
       <ul class="review-list" id="readinessChecks"><li>Collecting checks...</li></ul>
     </section>
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
     <section class="panel">
       <h2>Profit Stages</h2>
       <p class="note" id="profitStageSummary">Waiting for profit-stage checks...</p>
       <ul class="review-list" id="profitStageChecks"><li>Collecting profit stages...</li></ul>
     </section>
-=======
->>>>>>> main
     <section>
       <h2>Trade Diagnostics</h2>
       <div class="cards" id="diagnostics"></div>
@@ -200,10 +197,8 @@ function renderDashboard(data) {
 
   renderSafetyGuardrails(data);
   renderReadiness(data.readiness);
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
   renderProfitStage(data.profit_stage);
-=======
->>>>>>> main
+  renderProfitStage(data.profit_stage);
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
 
@@ -217,6 +212,8 @@ function renderDashboard(data) {
     ['Max Open Positions', data.config.max_open_positions],
     ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`],
     ['Stale Order Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`],
+    ['Spike Guard', `${num(data.config.max_tick_jump_pct * 100)}% / tick`],
+    ['Spike Cooldown', `${data.config.spike_cooldown_ticks} ticks`],
     ['Daily Loss Lock', `${num(data.config.max_daily_loss_pct * 100)}%`],
     ['Profit Lock', `${num(data.config.daily_profit_lock_pct * 100)}%`],
     ['Stop Loss', `${num(data.config.stop_loss_pct * 100)}%`],
@@ -246,10 +243,8 @@ function renderDashboard(data) {
 function renderSafetyGuardrails(data) {
   const plan = data.grid_plan || {};
   const diagnostics = data.diagnostics || {};
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
   const exchange = data.exchange || {};
-=======
->>>>>>> main
+  const exchange = data.exchange || {};
   const capClass = diagnostics.committed_notional_pct > 20 ? 'warn' : 'good';
   const cards = [
     [
@@ -271,12 +266,12 @@ function renderSafetyGuardrails(data) {
     ['Next Allowed', plan.next_order_allowed_by_cap ? 'Yes' : 'Blocked by cap', plan.next_order_allowed_by_cap ? 'good' : 'bad'],
     ['Grid Spacing', `${num(plan.spacing_pct || 0, 3)}%`, ''],
     ['Stale Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`, ''],
+    ['Spike Guard', `${num(data.config.max_tick_jump_pct * 100)}% / tick`, ''],
     ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`, ''],
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
     ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
     ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
-=======
->>>>>>> main
+    ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
+    ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
   ];
   document.getElementById('safetyGuardrails').innerHTML = cards
     .map(([label, value, klass]) =>
@@ -293,7 +288,6 @@ function renderReadiness(readiness) {
     return `<li><strong class="${check.level}">${icon} ${check.label}</strong> — ${check.message}</li>`;
   }).join('');
 }
-<<<<<<< codex/review-futures-grid-bot-files-zssg9o
 function renderProfitStage(profitStage) {
   if (!profitStage) return;
   document.getElementById('profitStageSummary').textContent = profitStage.summary;
@@ -302,8 +296,6 @@ function renderProfitStage(profitStage) {
     return `<li><strong class="${stage.level}">${icon} ${stage.label}</strong> — ${stage.message}</li>`;
   }).join('');
 }
-=======
->>>>>>> main
 function renderDiagnostics(diagnostics) {
   if (!diagnostics) return;
   document.getElementById('diagnostics').innerHTML = [

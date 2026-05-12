@@ -86,6 +86,7 @@ class GridEngine:
             raise ValueError("price must be positive")
 
         state = self.state
+        previous_price = state.last_price
         state.tick_count += 1
         state.last_price = price
         state.prices.append(price)
@@ -94,12 +95,32 @@ class GridEngine:
 
         self._refresh_grid(price)
         state.mode = self._detect_mode()
+        if self._is_spike_tick(previous_price, price):
+            self._handle_spike_tick(price)
+            return state
+
         self._open_positions_from_fills(state.exchange.process_price(price))
         self._update_risk_lock(price)
         self._close_positions(price)
         if state.trading_enabled:
             self._open_positions(price)
         return state
+
+    def _is_spike_tick(self, previous_price: float | None, price: float) -> bool:
+        if not previous_price:
+            return False
+        jump_pct = abs(price - previous_price) / previous_price
+        return jump_pct >= self.config.max_tick_jump_pct
+
+    def _handle_spike_tick(self, price: float) -> None:
+        self.cancel_open_orders()
+        self.state.mode = "PRICE_SPIKE_LOCK"
+        self.state.cooldown_until_tick = max(
+            self.state.cooldown_until_tick,
+            self.state.tick_count + self.config.spike_cooldown_ticks,
+        )
+        self._update_risk_lock(price)
+        self._close_positions(price)
 
     def snapshot(self) -> dict:
         price = self.state.last_price or 0.0
@@ -251,16 +272,22 @@ class GridEngine:
         if not self._within_notional_cap(price, notional, open_entry_orders):
             return
 
-        order_price = grid[index]
+        order_index = self._passive_order_index(index, allowed_side, len(grid))
+        order_price = grid[order_index]
         quantity = notional / order_price
         self.state.exchange.submit_limit_order(
             side="BUY" if allowed_side == "LONG" else "SELL",
             price=order_price,
             quantity=quantity,
             tag=f"grid_entry:{allowed_side}",
-            grid_index=index,
+            grid_index=order_index,
         )
         self.state.cooldown_until_tick = self.state.tick_count + self.config.cooldown_ticks
+
+    def _passive_order_index(self, nearest_index: int, side: str, grid_size: int) -> int:
+        if side == "LONG":
+            return max(0, nearest_index - 1)
+        return min(grid_size - 1, nearest_index + 1)
 
     def _cancel_stale_entry_orders(self, *, price: float, allowed_side: str, step: float) -> None:
         expected_order_side = "BUY" if allowed_side == "LONG" else "SELL"

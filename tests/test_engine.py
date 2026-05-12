@@ -49,7 +49,8 @@ def test_engine_routes_entries_through_paper_exchange_orders():
     assert len(snapshot["open_orders"]) == 1
     assert snapshot["open_orders"][0]["status"] == "NEW"
 
-    engine.on_price(100_000)
+    fill_price = snapshot["open_orders"][0]["price"]
+    engine.on_price(fill_price + 1)
     snapshot = engine.snapshot()
 
     assert len(snapshot["recent_fills"]) == 1
@@ -114,3 +115,34 @@ def test_stale_or_wrong_side_orders_are_canceled_before_new_entries():
         abs(order["price"] - snapshot["price"]) < snapshot["grid_plan"]["step"] * 1.1
         for order in snapshot["open_orders"]
     )
+
+
+def test_spike_tick_cancels_pending_orders_before_they_fill():
+    config = BotConfig(cooldown_ticks=1, max_tick_jump_pct=0.03, spike_cooldown_ticks=5)
+    engine = GridEngine(config)
+    engine.on_price(100_000)
+    engine.state.exchange.submit_limit_order(
+        side="BUY", price=100_000, quantity=0.01, tag="grid_entry:LONG"
+    )
+
+    engine.on_price(80_000)
+    snapshot = engine.snapshot()
+
+    assert snapshot["mode"] == "PRICE_SPIKE_LOCK"
+    assert snapshot["recent_fills"] == []
+    assert snapshot["open_orders"] == []
+    assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
+    assert engine.state.cooldown_until_tick > engine.state.tick_count
+
+
+def test_entries_use_passive_grid_levels_not_nearest_marketable_price():
+    engine = GridEngine(BotConfig(cooldown_ticks=1))
+
+    for _ in range(21):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    order = snapshot["open_orders"][0]
+
+    assert order["side"] == "SELL"
+    assert order["price"] > snapshot["price"]
