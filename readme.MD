@@ -9,7 +9,7 @@ Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a
 - ✅ BTC-only simulator dashboard for `BTCUSDT`.
 - ✅ Public Binance BTC price feed with deterministic offline fallback.
 - ✅ Simulated balance, realized PnL, unrealized PnL, win rate, paper orders, fills, open positions, and recent trades.
-- ✅ Moderate-risk defaults: low per-order risk, max open positions, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
+- ✅ Moderate-risk defaults: low per-order risk, max open positions, total committed-notional cap, stale pending-order cleanup, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
 - ✅ Beginner-friendly BTC backtest command.
 - ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, and BTC price chart.
 - ❌ No private Binance API keys yet.
@@ -76,7 +76,7 @@ The localhost dashboard includes beginner-friendly controls:
 - **Cancel paper orders** — cancel all pending local paper orders without closing simulated positions.
 - **Emergency stop** — cancel pending paper orders and lock new simulated entries until reset.
 - **Run quick synthetic backtest** — run a 500-candle deterministic backtest directly from the browser.
-- **Trade Diagnostics** — inspect open exposure, long/short split, gross profit/loss, profit factor, expectancy, trend-flip exits, grid width, and nearest target distance.
+- **Trade Diagnostics** — inspect open exposure, pending exposure, committed notional cap usage, slot usage, long/short split, gross profit/loss, profit factor, expectancy, trend-flip exits, grid width, grid spacing, and nearest target distance.
 - **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, and how much simulated exposure is open.
 - **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions.
 - **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
@@ -125,10 +125,11 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 1. **Local BTC simulator and dashboard** — done.
 2. **BTC backtesting command** — done.
 3. **Dashboard controls: pause/resume, reset, cancel orders, emergency stop, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
-4. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
-5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
-6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
-7. Only after BTC is stable, consider adding other symbols.
+4. Expand Binance-style local controls with richer order reconciliation, liquidation estimates, funding-rate modeling, and exchange filters.
+5. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
+6. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
+7. Add production safety gates: manual confirmation, exchange-side max leverage checks, kill switch, error alerts, and audit logs.
+8. Only after BTC is stable, consider adding other symbols.
 
 ## Tests
 
