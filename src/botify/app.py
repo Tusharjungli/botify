@@ -60,6 +60,7 @@ PAGE = """
     .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
     .status-line { min-height: 24px; color: #a8b3c7; }
+    .status-line.error { color: #fb7185; font-weight: 700; }
     .chart-wrap { position: relative; height: 360px; }
     canvas { width: 100%; height: 100%; border-radius: 14px; background: #08111f; }
     .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: #a8b3c7; font-size: 13px; }
@@ -162,19 +163,34 @@ function factorText(n, label = null) {
 function sourceLabel(source) {
   return source === 'binance_public' ? 'Binance public' : source;
 }
-async function postJson(path) {
-  const response = await fetch(path, {method: 'POST'});
-  if (!response.ok) throw new Error(`${path} failed with ${response.status}`);
+async function fetchJson(path, options = {}) {
+  const response = await fetch(path, {cache: 'no-store', ...options});
+  if (!response.ok) throw new Error(`${path} failed with HTTP ${response.status}`);
   return response.json();
 }
-async function refresh() {
-  const stateResponse = await fetch('/api/control');
-  const control = await stateResponse.json();
-  const response = await fetch(control.paused ? '/api/state' : '/api/tick');
-  const data = await response.json();
-  renderDashboard(data);
+async function postJson(path) {
+  return fetchJson(path, {method: 'POST'});
 }
+function showDashboardError(error) {
+  const statusLine = document.getElementById('statusLine');
+  if (!statusLine) return;
+  statusLine.classList.add('error');
+  statusLine.textContent = `Dashboard refresh failed: ${error.message}. Try opening /api/tick directly and restart the server if it fails.`;
+}
+async function refresh() {
+  try {
+    const control = await fetchJson('/api/control');
+    const data = await fetchJson(control.paused ? '/api/state' : '/api/tick');
+    renderDashboard(data);
+  } catch (error) {
+    showDashboardError(error);
+    console.error(error);
+  }
+}
+window.addEventListener('error', (event) => showDashboardError(event.error || new Error(event.message)));
+window.addEventListener('unhandledrejection', (event) => showDashboardError(event.reason || new Error('Unhandled promise rejection')));
 function renderDashboard(data) {
+  document.getElementById('statusLine').classList.remove('error');
   document.getElementById('pauseButton').textContent = data.paused ? 'Resume' : 'Pause';
   const statusText = data.paused
     ? 'Paused: Botify is not advancing new price ticks. Click Resume to continue.'
@@ -197,7 +213,6 @@ function renderDashboard(data) {
 
   renderSafetyGuardrails(data);
   renderReadiness(data.readiness);
-  renderProfitStage(data.profit_stage);
   renderProfitStage(data.profit_stage);
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
@@ -244,7 +259,6 @@ function renderSafetyGuardrails(data) {
   const plan = data.grid_plan || {};
   const diagnostics = data.diagnostics || {};
   const exchange = data.exchange || {};
-  const exchange = data.exchange || {};
   const capClass = diagnostics.committed_notional_pct > 20 ? 'warn' : 'good';
   const cards = [
     [
@@ -268,8 +282,6 @@ function renderSafetyGuardrails(data) {
     ['Stale Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`, ''],
     ['Spike Guard', `${num(data.config.max_tick_jump_pct * 100)}% / tick`, ''],
     ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`, ''],
-    ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
-    ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
     ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
     ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
   ];

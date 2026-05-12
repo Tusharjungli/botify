@@ -175,3 +175,10 @@ def test_snapshot_exposes_exchange_adapter_status():
     assert snapshot["exchange"]["filters"]["symbol"] == "BTCUSDT"
     assert snapshot["exchange"]["mark_price"] == snapshot["price"]
     assert "Exchange Adapter" in app.PAGE
+
+
+def test_dashboard_page_includes_refresh_error_diagnostics():
+    assert "fetchJson('/api/control')" in app.PAGE
+    assert "fetchJson(control.paused ? '/api/state' : '/api/tick')" in app.PAGE
+    assert "Dashboard refresh failed" in app.PAGE
+    assert "unhandledrejection" in app.PAGE
