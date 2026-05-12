@@ -32,6 +32,8 @@ class BotConfig:
     trailing_stop_pct: float = 0.004
     min_grid_profit_pct: float = 0.0015
     cooldown_ticks: int = 2
+    max_tick_jump_pct: float = 0.03
+    spike_cooldown_ticks: int = 10
     ema_fast: int = 9
     ema_slow: int = 21
     trend_strength_threshold: float = 0.00035
@@ -51,5 +53,9 @@ class BotConfig:
             raise ValueError("max_total_notional_pct must be > 0 and <= 100%.")
         if self.stale_order_grid_steps <= 0:
             raise ValueError("stale_order_grid_steps must be positive.")
+        if not 0 < self.max_tick_jump_pct <= 0.20:
+            raise ValueError("max_tick_jump_pct must be > 0 and <= 20%.")
+        if self.spike_cooldown_ticks < 1:
+            raise ValueError("spike_cooldown_ticks must be at least 1.")
         if self.leverage < 1 or self.leverage > 5:
             raise ValueError("For moderate risk, leverage must stay between 1x and 5x.")
