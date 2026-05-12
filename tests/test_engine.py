@@ -49,7 +49,8 @@ def test_engine_routes_entries_through_paper_exchange_orders():
     assert len(snapshot["open_orders"]) == 1
     assert snapshot["open_orders"][0]["status"] == "NEW"
 
-    engine.on_price(100_000)
+    fill_price = snapshot["open_orders"][0]["price"]
+    engine.on_price(fill_price + 1)
     snapshot = engine.snapshot()
 
     assert len(snapshot["recent_fills"]) == 1
@@ -70,3 +71,95 @@ def test_emergency_stop_cancels_orders_and_locks_entries():
     assert "Manual emergency stop" in snapshot["lock_reason"]
     assert snapshot["open_orders"] == []
     assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
+
+
+def test_pending_orders_have_separate_capacity_from_positions():
+    config = BotConfig(cooldown_ticks=1, max_open_positions=1, max_pending_orders=2, max_pending_orders_per_side=1)
+    engine = GridEngine(config)
+    engine.state.exchange.submit_limit_order(
+        side="BUY", price=99_000, quantity=0.01, tag="grid_entry:LONG"
+    )
+
+    snapshot = engine.snapshot()
+
+    assert len(snapshot["open_orders"]) == 1
+    assert snapshot["grid_plan"]["slots_used"] == 0
+    assert snapshot["grid_plan"]["slots_remaining"] == 1
+    assert snapshot["grid_plan"]["pending_slots_used"] == 1
+    assert snapshot["grid_plan"]["pending_slots_remaining"] == 1
+
+
+def test_notional_cap_blocks_new_grid_orders():
+    config = BotConfig(cooldown_ticks=1, max_total_notional_pct=0.01)
+    engine = GridEngine(config)
+
+    for _ in range(25):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    assert snapshot["open_orders"] == []
+    assert snapshot["grid_plan"]["next_order_allowed_by_cap"] is False
+
+
+def test_stale_or_wrong_side_orders_are_canceled_before_new_entries():
+    config = BotConfig(cooldown_ticks=1, stale_order_grid_steps=1)
+    engine = GridEngine(config)
+    engine.state.exchange.submit_limit_order(
+        side="BUY", price=90_000, quantity=0.01, tag="grid_entry:LONG"
+    )
+
+    for _ in range(25):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    assert any(order["status"] == "CANCELED" for order in snapshot["canceled_orders"])
+    assert all(
+        abs(order["price"] - snapshot["price"]) < snapshot["grid_plan"]["step"] * 1.1
+        for order in snapshot["open_orders"]
+    )
+
+
+def test_spike_tick_cancels_pending_orders_before_they_fill():
+    config = BotConfig(cooldown_ticks=1, max_tick_jump_pct=0.03, spike_cooldown_ticks=5)
+    engine = GridEngine(config)
+    engine.on_price(100_000)
+    engine.state.exchange.submit_limit_order(
+        side="BUY", price=100_000, quantity=0.01, tag="grid_entry:LONG"
+    )
+
+    engine.on_price(80_000)
+    snapshot = engine.snapshot()
+
+    assert snapshot["mode"] == "PRICE_SPIKE_LOCK"
+    assert snapshot["recent_fills"] == []
+    assert snapshot["open_orders"] == []
+    assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
+    assert engine.state.cooldown_until_tick > engine.state.tick_count
+
+
+def test_entries_use_passive_grid_levels_not_nearest_marketable_price():
+    engine = GridEngine(BotConfig(cooldown_ticks=1))
+
+    for _ in range(21):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    order = snapshot["open_orders"][0]
+
+    assert order["side"] == "SELL"
+    assert order["price"] > snapshot["price"]
+
+
+def test_pending_order_capacity_blocks_new_grid_orders():
+    config = BotConfig(cooldown_ticks=1, max_pending_orders=1, max_pending_orders_per_side=1)
+    engine = GridEngine(config)
+    engine.state.exchange.submit_limit_order(
+        side="SELL", price=101_000, quantity=0.01, tag="grid_entry:SHORT"
+    )
+
+    for _ in range(25):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    assert len(snapshot["open_orders"]) == 1
+    assert snapshot["grid_plan"]["pending_slots_remaining"] == 0
