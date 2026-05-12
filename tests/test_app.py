@@ -1,5 +1,5 @@
 from botify import app
-from botify.engine import Trade
+from botify.engine import Position, Trade
 
 
 def test_pause_toggle_and_reset_controls():
@@ -136,3 +136,45 @@ def test_readiness_blocks_live_when_sample_and_pnl_are_not_ready():
     assert labels["Exposure cap"]["passed"] is True
     assert any(note["label"] == "Not live-ready" for note in snapshot["review_notes"])
     assert "Live Readiness" in app.PAGE
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
+
+
+def test_profit_stage_explains_when_realized_profit_can_appear():
+    app.reset_simulation()
+    app.engine.on_price(80_000)
+    app.engine.state.positions.append(
+        Position(
+            side="SHORT",
+            entry_price=80_000,
+            notional=250,
+            quantity=0.003125,
+            opened_at="2026-01-01T00:00:00+00:00",
+            target_price=79_700,
+            stop_price=80_960,
+            peak_price=80_000,
+            trough_price=80_000,
+            grid_index=12,
+        )
+    )
+
+    snapshot = app.snapshot_with_controls()
+    profit_stage = snapshot["profit_stage"]
+
+    assert "realized profit only appears after" in profit_stage["summary"]
+    assert profit_stage["stages"][0]["passed"] is True
+    assert profit_stage["stages"][1]["passed"] is False
+    assert "fall to $79,700.00" in profit_stage["stages"][1]["message"]
+    assert "Profit Stages" in app.PAGE
+
+
+def test_snapshot_exposes_exchange_adapter_status():
+    app.reset_simulation()
+    snapshot = app.tick_dashboard()
+
+    assert snapshot["exchange"]["mode"] == "LOCAL_EMULATOR"
+    assert snapshot["exchange"]["can_place_orders"] is True
+    assert snapshot["exchange"]["filters"]["symbol"] == "BTCUSDT"
+    assert snapshot["exchange"]["mark_price"] == snapshot["price"]
+    assert "Exchange Adapter" in app.PAGE
+=======
+>>>>>>> main

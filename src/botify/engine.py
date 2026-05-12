@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from statistics import mean
 
 from .config import BotConfig
-from .exchange import Order, PaperExchange
+from .exchange import ExchangeAdapter, Order, PaperExchange
 
 
 @dataclass
@@ -62,7 +62,7 @@ class BotState:
     mode: str = "WARMING_UP"
     last_price: float | None = None
     realized_pnl: float = 0.0
-    exchange: PaperExchange = field(default_factory=PaperExchange)
+    exchange: ExchangeAdapter = field(default_factory=PaperExchange)
 
 
 class GridEngine:
@@ -109,6 +109,7 @@ class GridEngine:
         wins = sum(1 for trade in self.state.trades if trade.pnl > 0)
         return {
             "config": asdict(self.config),
+            "exchange": self.state.exchange.status().to_dict(),
             "price": price,
             "mode": self.state.mode,
             "balance": self.state.balance,
@@ -119,7 +120,7 @@ class GridEngine:
             "trading_enabled": self.state.trading_enabled,
             "lock_reason": self.state.lock_reason,
             "grid": self.state.grid,
-            "positions": [asdict(position) | {"unrealized_pnl": position.unrealized_pnl(price)} for position in self.state.positions],
+            "positions": [self._position_payload(position, price) for position in self.state.positions],
             "open_orders": [order.to_dict() for order in self.state.exchange.open_orders()],
             "recent_fills": [order.to_dict() for order in self.state.exchange.recent_fills()],
             "canceled_orders": [order.to_dict() for order in self.state.exchange.recent_canceled()],
@@ -129,6 +130,15 @@ class GridEngine:
             "closed_trades": closed,
             "grid_plan": self._grid_plan(price, equity),
         }
+
+    def _position_payload(self, position: Position, price: float) -> dict:
+        payload = asdict(position) | {"unrealized_pnl": position.unrealized_pnl(price)}
+        payload["liquidation_price"] = self.state.exchange.liquidation_price(
+            side=position.side,
+            entry_price=position.entry_price,
+            leverage=self.config.leverage,
+        )
+        return payload
 
     def _grid_plan(self, price: float, equity: float) -> dict:
         grid = self.state.grid
