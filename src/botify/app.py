@@ -40,6 +40,7 @@ PAGE = """
     header { padding: 24px; background: linear-gradient(135deg, #172554, #111827); border-bottom: 1px solid #23304d; }
     main { padding: 24px; display: grid; gap: 18px; }
     .cards, .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+    .safety-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
     .card, .panel, table { background: #111827; border: 1px solid #23304d; border-radius: 16px; box-shadow: 0 16px 32px #0004; }
     .card, .panel { padding: 16px; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -48,13 +49,13 @@ PAGE = """
     button.warning { background: #fbbf24; }
     button:hover { filter: brightness(1.08); }
     .label { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-    .value { margin-top: 8px; font-size: 24px; font-weight: 800; }
-    .small-value { margin-top: 8px; font-size: 18px; font-weight: 700; }
+    .value { margin-top: 8px; font-size: 24px; font-weight: 800; overflow-wrap: anywhere; }
+    .small-value { margin-top: 8px; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
     .good { color: #34d399; } .bad { color: #fb7185; } .warn { color: #fbbf24; }
     table { width: 100%; border-collapse: collapse; overflow: hidden; }
     th, td { padding: 12px 14px; border-bottom: 1px solid #23304d; text-align: left; font-size: 14px; }
     th { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
+    .pill { display: inline-block; max-width: 100%; padding: 4px 10px; border-radius: 999px; background: #1e293b; overflow-wrap: anywhere; }
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
     .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
@@ -84,6 +85,11 @@ PAGE = """
       <p class="status-line" id="statusLine">Loading dashboard state...</p>
     </section>
     <section class="cards" id="cards"></section>
+    <section class="panel">
+      <h2>Safety Guardrails</h2>
+      <p class="note">Binance-style grid controls shown separately so pending exposure and caps are always visible before any live trading integration.</p>
+      <div class="cards safety-grid" id="safetyGuardrails"></div>
+    </section>
     <section>
       <h2>Trade Diagnostics</h2>
       <div class="cards" id="diagnostics"></div>
@@ -133,7 +139,19 @@ PAGE = """
 const money = (n) => Number(n).toLocaleString(undefined, {style: 'currency', currency: 'USD'});
 const num = (n, d=2) => Number(n).toLocaleString(undefined, {maximumFractionDigits: d});
 function pnlClass(n) { return Number(n) >= 0 ? 'good' : 'bad'; }
-function factorClass(n) { return n === null || Number(n) >= 1 ? 'good' : 'bad'; }
+function factorClass(n) {
+  if (n === null || n === undefined) return '';
+  return Number(n) >= 1 ? 'good' : 'bad';
+}
+function factorText(n, label = null) {
+  if (label) return label;
+  if (n === null || n === undefined) return 'n/a';
+  if (!Number.isFinite(Number(n))) return 'infinite';
+  return num(n);
+}
+function sourceLabel(source) {
+  return source === 'binance_public' ? 'Binance public' : source;
+}
 async function postJson(path) {
   const response = await fetch(path, {method: 'POST'});
   if (!response.ok) throw new Error(`${path} failed with ${response.status}`);
@@ -154,7 +172,7 @@ function renderDashboard(data) {
   document.getElementById('statusLine').textContent = data.control_message ? `${data.control_message} ${statusText}` : statusText;
   document.getElementById('cards').innerHTML = [
     ['BTC Price', money(data.price), ''],
-    ['Price Source', `<span class="pill">${data.price_source}</span>`, ''],
+    ['Price Source', `<span class="pill">${sourceLabel(data.price_source)}</span>`, ''],
     ['Mode', `<span class="pill">${data.mode}</span>`, ''],
     ['Simulator', data.paused ? 'Paused' : 'Running', data.paused ? 'warn' : 'good'],
     ['Equity', money(data.equity), pnlClass(data.equity - data.config.starting_balance)],
@@ -167,6 +185,7 @@ function renderDashboard(data) {
     ['Closed Trades', data.closed_trades, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 
+  renderSafetyGuardrails(data);
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
 
@@ -178,6 +197,8 @@ function renderDashboard(data) {
     ['Leverage', `${num(data.config.leverage)}x`],
     ['Order Risk', `${num(data.config.base_order_risk_pct * 100)}%`],
     ['Max Open Positions', data.config.max_open_positions],
+    ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`],
+    ['Stale Order Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`],
     ['Daily Loss Lock', `${num(data.config.max_daily_loss_pct * 100)}%`],
     ['Profit Lock', `${num(data.config.daily_profit_lock_pct * 100)}%`],
     ['Stop Loss', `${num(data.config.stop_loss_pct * 100)}%`],
@@ -204,20 +225,56 @@ function renderDashboard(data) {
   drawChart(data.chart);
   if (data.last_backtest) renderBacktest(data.last_backtest);
 }
+function renderSafetyGuardrails(data) {
+  const plan = data.grid_plan || {};
+  const diagnostics = data.diagnostics || {};
+  const capClass = diagnostics.committed_notional_pct > 20 ? 'warn' : 'good';
+  const cards = [
+    [
+      'Committed / Cap',
+      `${money(plan.total_committed_notional || 0)} / ${money(plan.max_notional || 0)}`,
+      capClass,
+    ],
+    [
+      'Open + Pending',
+      `${money(plan.open_notional || 0)} + ${money(plan.pending_notional || 0)}`,
+      (plan.pending_notional || 0) ? 'warn' : '',
+    ],
+    [
+      'Grid Slots',
+      `${plan.slots_used || 0} used / ${plan.slots_remaining || 0} left`,
+      (plan.slots_remaining || 0) ? 'good' : 'warn',
+    ],
+    ['Next Order', money(plan.next_order_notional || 0), plan.next_order_allowed_by_cap ? 'good' : 'bad'],
+    ['Next Allowed', plan.next_order_allowed_by_cap ? 'Yes' : 'Blocked by cap', plan.next_order_allowed_by_cap ? 'good' : 'bad'],
+    ['Grid Spacing', `${num(plan.spacing_pct || 0, 3)}%`, ''],
+    ['Stale Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`, ''],
+    ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`, ''],
+  ];
+  document.getElementById('safetyGuardrails').innerHTML = cards
+    .map(([label, value, klass]) =>
+      `<article class="card"><div class="label">${label}</div><div class="small-value ${klass}">${value}</div></article>`
+    )
+    .join('');
+}
 function renderDiagnostics(diagnostics) {
   if (!diagnostics) return;
   document.getElementById('diagnostics').innerHTML = [
     ['Open Exposure', money(diagnostics.open_exposure), ''],
+    ['Pending Exposure', money(diagnostics.pending_exposure), diagnostics.pending_exposure ? 'warn' : ''],
+    ['Committed Cap', `${num(diagnostics.committed_notional_pct)}%`, diagnostics.committed_notional_pct > 20 ? 'warn' : ''],
+    ['Grid Slots', `${diagnostics.grid_slots_used} used / ${diagnostics.grid_slots_remaining} left`, diagnostics.grid_slots_remaining ? '' : 'warn'],
     ['Open Positions', diagnostics.open_positions, ''],
     ['Long / Short', `${diagnostics.long_positions} / ${diagnostics.short_positions}`, ''],
     ['Gross Profit', money(diagnostics.gross_profit), 'good'],
     ['Gross Loss', money(-diagnostics.gross_loss), 'bad'],
-    ['Profit Factor', diagnostics.profit_factor === null ? 'infinite' : num(diagnostics.profit_factor), factorClass(diagnostics.profit_factor)],
+    ['Profit Factor', factorText(diagnostics.profit_factor, diagnostics.profit_factor_label), factorClass(diagnostics.profit_factor)],
     ['Avg Win', money(diagnostics.average_win), pnlClass(diagnostics.average_win)],
     ['Avg Loss', money(diagnostics.average_loss), pnlClass(diagnostics.average_loss)],
     ['Expectancy', money(diagnostics.expectancy), pnlClass(diagnostics.expectancy)],
     ['Trend Flip Exits', diagnostics.trend_flip_exits, diagnostics.trend_flip_exits ? 'warn' : ''],
     ['Grid Width', `${num(diagnostics.grid_width_pct)}%`, ''],
+    ['Grid Spacing', `${num(diagnostics.grid_spacing_pct, 3)}%`, ''],
     ['Nearest Target', diagnostics.nearest_target_distance_pct === null ? 'n/a' : `${num(diagnostics.nearest_target_distance_pct)}%`, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 }
@@ -403,6 +460,7 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
+        self._send_no_store_headers()
         self.end_headers()
         self._safe_write(encoded)
 
@@ -411,6 +469,7 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(encoded)))
+        self._send_no_store_headers()
         self.end_headers()
         self._safe_write(encoded)
 
@@ -420,8 +479,13 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Disposition", 'attachment; filename="botify_trades.csv"')
         self.send_header("Content-Length", str(len(encoded)))
+        self._send_no_store_headers()
         self.end_headers()
         self._safe_write(encoded)
+
+    def _send_no_store_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Pragma", "no-cache")
 
     def _safe_write(self, encoded: bytes) -> None:
         try:
@@ -540,11 +604,16 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     losses = [trade.pnl for trade in trades if trade.pnl < 0]
     gross_profit = sum(wins)
     gross_loss = abs(sum(losses))
-    profit_factor = (
-        math.inf
-        if gross_profit and gross_loss == 0
-        else (gross_profit / gross_loss if gross_loss else 0.0)
-    )
+    closed_trades = len(trades)
+    profit_factor_label = None
+    if not closed_trades:
+        profit_factor = None
+        profit_factor_label = "n/a"
+    elif gross_profit and gross_loss == 0:
+        profit_factor = None
+        profit_factor_label = "infinite"
+    else:
+        profit_factor = gross_profit / gross_loss if gross_loss else 0.0
     positions = snapshot.get("positions", [])
     price = snapshot.get("price", 0.0)
     grid = snapshot.get("grid", [])
@@ -553,10 +622,19 @@ def _diagnostics_payload(snapshot: dict) -> dict:
         for position in positions
         if price
     ]
-    closed_trades = len(trades)
     expectancy = sum(trade.pnl for trade in trades) / closed_trades if closed_trades else 0.0
+    equity = snapshot.get("equity", 0.0)
+    grid_plan = snapshot.get("grid_plan", {})
+    open_exposure = sum(position["notional"] for position in positions)
+    pending_exposure = grid_plan.get("pending_notional", 0.0)
+    committed_notional = grid_plan.get("total_committed_notional", open_exposure + pending_exposure)
     return {
-        "open_exposure": sum(position["notional"] for position in positions),
+        "open_exposure": open_exposure,
+        "pending_exposure": pending_exposure,
+        "committed_notional_pct": (committed_notional / equity * 100) if equity else 0.0,
+        "grid_slots_used": grid_plan.get("slots_used", len(positions)),
+        "grid_slots_remaining": grid_plan.get("slots_remaining", 0),
+        "grid_spacing_pct": grid_plan.get("spacing_pct", 0.0),
         "open_positions": len(positions),
         "long_positions": sum(1 for position in positions if position["side"] == "LONG"),
         "short_positions": sum(1 for position in positions if position["side"] == "SHORT"),
@@ -564,7 +642,8 @@ def _diagnostics_payload(snapshot: dict) -> dict:
         "average_loss": sum(losses) / len(losses) if losses else 0.0,
         "gross_profit": gross_profit,
         "gross_loss": gross_loss,
-        "profit_factor": None if math.isinf(profit_factor) else profit_factor,
+        "profit_factor": profit_factor,
+        "profit_factor_label": profit_factor_label,
         "expectancy": expectancy,
         "trend_flip_exits": sum(1 for trade in trades if trade.reason == "trend_flip"),
         "grid_width_pct": ((grid[-1] - grid[0]) / price * 100) if grid and price else 0.0,
