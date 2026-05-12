@@ -78,7 +78,10 @@ def test_diagnostics_and_csv_export_include_trade_data():
 
     assert diagnostics["gross_profit"] == 1.0
     assert diagnostics["gross_loss"] == 0.5
+    assert "pending_exposure" in diagnostics
+    assert "committed_notional_pct" in diagnostics
     assert diagnostics["profit_factor"] == 2.0
+    assert diagnostics["profit_factor_label"] is None
     assert diagnostics["expectancy"] == 0.25
     assert diagnostics["trend_flip_exits"] == 1
     assert any(note["label"] == "Small sample" for note in review_notes)
@@ -105,3 +108,31 @@ def test_cancel_orders_and_emergency_stop_controls():
     assert "Manual emergency stop" in stop_snapshot["lock_reason"]
     assert stop_snapshot["open_orders"] == []
     assert "Emergency stop active" in stop_snapshot["control_message"]
+
+
+def test_empty_profit_factor_is_not_shown_as_infinite():
+    app.reset_simulation()
+
+    snapshot = app.snapshot_with_controls()
+
+    assert snapshot["diagnostics"]["profit_factor"] is None
+    assert snapshot["diagnostics"]["profit_factor_label"] == "n/a"
+    assert "Safety Guardrails" in app.PAGE
+    assert "sourceLabel(data.price_source)" in app.PAGE
+
+
+def test_readiness_blocks_live_when_sample_and_pnl_are_not_ready():
+    app.reset_simulation()
+    app.engine.on_price(80_000)
+
+    snapshot = app.snapshot_with_controls()
+    readiness = snapshot["readiness"]
+    labels = {check["label"]: check for check in readiness["checks"]}
+
+    assert readiness["status"] == "NOT_READY"
+    assert "Do not connect live keys" in readiness["message"]
+    assert labels["Sample size"]["passed"] is False
+    assert labels["Current run PnL"]["passed"] is False
+    assert labels["Exposure cap"]["passed"] is True
+    assert any(note["label"] == "Not live-ready" for note in snapshot["review_notes"])
+    assert "Live Readiness" in app.PAGE

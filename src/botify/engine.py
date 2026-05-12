@@ -127,6 +127,40 @@ class GridEngine:
             "tick_count": self.state.tick_count,
             "win_rate": (wins / closed * 100) if closed else 0.0,
             "closed_trades": closed,
+            "grid_plan": self._grid_plan(price, equity),
+        }
+
+    def _grid_plan(self, price: float, equity: float) -> dict:
+        grid = self.state.grid
+        open_orders = self.state.exchange.open_orders()
+        open_notional = sum(position.notional for position in self.state.positions)
+        pending_notional = sum(
+            order.notional for order in open_orders if order.tag.startswith("grid_entry")
+        )
+        max_notional = equity * self.config.max_total_notional_pct if equity > 0 else 0.0
+        next_margin = self.state.balance * self.config.base_order_risk_pct
+        next_notional = next_margin * self.config.leverage
+        slots_used = len(self.state.positions) + len(
+            [order for order in open_orders if order.tag.startswith("grid_entry")]
+        )
+        spacing_pct = 0.0
+        if len(grid) >= 2 and price:
+            spacing_pct = (grid[1] - grid[0]) / price * 100
+        return {
+            "lower": grid[0] if grid else None,
+            "upper": grid[-1] if grid else None,
+            "step": (grid[1] - grid[0]) if len(grid) >= 2 else 0.0,
+            "spacing_pct": spacing_pct,
+            "slots_used": slots_used,
+            "slots_remaining": max(0, self.config.max_open_positions - slots_used),
+            "open_notional": open_notional,
+            "pending_notional": pending_notional,
+            "total_committed_notional": open_notional + pending_notional,
+            "max_notional": max_notional,
+            "next_order_notional": next_notional,
+            "next_order_allowed_by_cap": (
+                open_notional + pending_notional + next_notional <= max_notional
+            ),
         }
 
     def _refresh_grid(self, price: float) -> None:
@@ -168,8 +202,6 @@ class GridEngine:
             self.state.trading_enabled = True
 
     def _open_positions(self, price: float) -> None:
-        if len(self.state.positions) >= self.config.max_open_positions:
-            return
         if self.state.tick_count < self.state.cooldown_until_tick:
             return
         if self.state.mode == "WARMING_UP":
@@ -188,14 +220,25 @@ class GridEngine:
         else:
             allowed_side = "SHORT"
 
+        self._cancel_stale_entry_orders(price=price, allowed_side=allowed_side, step=step)
+        open_entry_orders = [
+            order
+            for order in self.state.exchange.open_orders()
+            if order.tag.startswith("grid_entry")
+        ]
+        if len(self.state.positions) + len(open_entry_orders) >= self.config.max_open_positions:
+            return
+
         nearby_position_exists = any(abs(position.entry_price - price) < step * 0.55 for position in self.state.positions)
-        nearby_order_exists = any(abs(order.price - price) < step * 0.55 for order in self.state.exchange.open_orders())
+        nearby_order_exists = any(abs(order.price - price) < step * 0.55 for order in open_entry_orders)
         if nearby_position_exists or nearby_order_exists:
             return
 
         margin = self.state.balance * self.config.base_order_risk_pct
         notional = margin * self.config.leverage
         if notional <= 0:
+            return
+        if not self._within_notional_cap(price, notional, open_entry_orders):
             return
 
         order_price = grid[index]
@@ -208,6 +251,26 @@ class GridEngine:
             grid_index=index,
         )
         self.state.cooldown_until_tick = self.state.tick_count + self.config.cooldown_ticks
+
+    def _cancel_stale_entry_orders(self, *, price: float, allowed_side: str, step: float) -> None:
+        expected_order_side = "BUY" if allowed_side == "LONG" else "SELL"
+        for order in self.state.exchange.open_orders():
+            if not order.tag.startswith("grid_entry"):
+                continue
+            too_far_from_grid = abs(order.price - price) > step * self.config.stale_order_grid_steps
+            wrong_side_for_mode = order.side != expected_order_side
+            if too_far_from_grid or wrong_side_for_mode:
+                self.state.exchange.cancel_order(order.order_id)
+
+    def _within_notional_cap(
+        self, price: float, next_notional: float, open_entry_orders: list[Order]
+    ) -> bool:
+        unrealized = sum(position.unrealized_pnl(price) for position in self.state.positions)
+        equity = self.state.balance + unrealized
+        max_notional = equity * self.config.max_total_notional_pct
+        committed = sum(position.notional for position in self.state.positions)
+        committed += sum(order.notional for order in open_entry_orders)
+        return committed + next_notional <= max_notional
 
     def _open_positions_from_fills(self, filled_orders: list[Order]) -> None:
         if not filled_orders or len(self.state.grid) < 2:
