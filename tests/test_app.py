@@ -78,6 +78,8 @@ def test_diagnostics_and_csv_export_include_trade_data():
 
     assert diagnostics["gross_profit"] == 1.0
     assert diagnostics["gross_loss"] == 0.5
+    assert "pending_exposure" in diagnostics
+    assert "committed_notional_pct" in diagnostics
     assert diagnostics["profit_factor"] == 2.0
     assert diagnostics["expectancy"] == 0.25
     assert diagnostics["trend_flip_exits"] == 1

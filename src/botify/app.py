@@ -178,6 +178,8 @@ function renderDashboard(data) {
     ['Leverage', `${num(data.config.leverage)}x`],
     ['Order Risk', `${num(data.config.base_order_risk_pct * 100)}%`],
     ['Max Open Positions', data.config.max_open_positions],
+    ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`],
+    ['Stale Order Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`],
     ['Daily Loss Lock', `${num(data.config.max_daily_loss_pct * 100)}%`],
     ['Profit Lock', `${num(data.config.daily_profit_lock_pct * 100)}%`],
     ['Stop Loss', `${num(data.config.stop_loss_pct * 100)}%`],
@@ -208,6 +210,9 @@ function renderDiagnostics(diagnostics) {
   if (!diagnostics) return;
   document.getElementById('diagnostics').innerHTML = [
     ['Open Exposure', money(diagnostics.open_exposure), ''],
+    ['Pending Exposure', money(diagnostics.pending_exposure), diagnostics.pending_exposure ? 'warn' : ''],
+    ['Committed Cap', `${num(diagnostics.committed_notional_pct)}%`, diagnostics.committed_notional_pct > 20 ? 'warn' : ''],
+    ['Grid Slots', `${diagnostics.grid_slots_used} used / ${diagnostics.grid_slots_remaining} left`, diagnostics.grid_slots_remaining ? '' : 'warn'],
     ['Open Positions', diagnostics.open_positions, ''],
     ['Long / Short', `${diagnostics.long_positions} / ${diagnostics.short_positions}`, ''],
     ['Gross Profit', money(diagnostics.gross_profit), 'good'],
@@ -218,6 +223,7 @@ function renderDiagnostics(diagnostics) {
     ['Expectancy', money(diagnostics.expectancy), pnlClass(diagnostics.expectancy)],
     ['Trend Flip Exits', diagnostics.trend_flip_exits, diagnostics.trend_flip_exits ? 'warn' : ''],
     ['Grid Width', `${num(diagnostics.grid_width_pct)}%`, ''],
+    ['Grid Spacing', `${num(diagnostics.grid_spacing_pct, 3)}%`, ''],
     ['Nearest Target', diagnostics.nearest_target_distance_pct === null ? 'n/a' : `${num(diagnostics.nearest_target_distance_pct)}%`, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 }
@@ -555,8 +561,18 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     ]
     closed_trades = len(trades)
     expectancy = sum(trade.pnl for trade in trades) / closed_trades if closed_trades else 0.0
+    equity = snapshot.get("equity", 0.0)
+    grid_plan = snapshot.get("grid_plan", {})
+    open_exposure = sum(position["notional"] for position in positions)
+    pending_exposure = grid_plan.get("pending_notional", 0.0)
+    committed_notional = grid_plan.get("total_committed_notional", open_exposure + pending_exposure)
     return {
-        "open_exposure": sum(position["notional"] for position in positions),
+        "open_exposure": open_exposure,
+        "pending_exposure": pending_exposure,
+        "committed_notional_pct": (committed_notional / equity * 100) if equity else 0.0,
+        "grid_slots_used": grid_plan.get("slots_used", len(positions)),
+        "grid_slots_remaining": grid_plan.get("slots_remaining", 0),
+        "grid_spacing_pct": grid_plan.get("spacing_pct", 0.0),
         "open_positions": len(positions),
         "long_positions": sum(1 for position in positions if position["side"] == "LONG"),
         "short_positions": sum(1 for position in positions if position["side"] == "SHORT"),
