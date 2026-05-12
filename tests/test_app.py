@@ -119,3 +119,20 @@ def test_empty_profit_factor_is_not_shown_as_infinite():
     assert snapshot["diagnostics"]["profit_factor_label"] == "n/a"
     assert "Safety Guardrails" in app.PAGE
     assert "sourceLabel(data.price_source)" in app.PAGE
+
+
+def test_readiness_blocks_live_when_sample_and_pnl_are_not_ready():
+    app.reset_simulation()
+    app.engine.on_price(80_000)
+
+    snapshot = app.snapshot_with_controls()
+    readiness = snapshot["readiness"]
+    labels = {check["label"]: check for check in readiness["checks"]}
+
+    assert readiness["status"] == "NOT_READY"
+    assert "Do not connect live keys" in readiness["message"]
+    assert labels["Sample size"]["passed"] is False
+    assert labels["Current run PnL"]["passed"] is False
+    assert labels["Exposure cap"]["passed"] is True
+    assert any(note["label"] == "Not live-ready" for note in snapshot["review_notes"])
+    assert "Live Readiness" in app.PAGE

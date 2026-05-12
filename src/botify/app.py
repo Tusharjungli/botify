@@ -90,6 +90,11 @@ PAGE = """
       <p class="note">Binance-style grid controls shown separately so pending exposure and caps are always visible before any live trading integration.</p>
       <div class="cards safety-grid" id="safetyGuardrails"></div>
     </section>
+    <section class="panel">
+      <h2>Live Readiness</h2>
+      <p class="note" id="readinessSummary">Waiting for readiness checks...</p>
+      <ul class="review-list" id="readinessChecks"><li>Collecting checks...</li></ul>
+    </section>
     <section>
       <h2>Trade Diagnostics</h2>
       <div class="cards" id="diagnostics"></div>
@@ -186,6 +191,7 @@ function renderDashboard(data) {
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 
   renderSafetyGuardrails(data);
+  renderReadiness(data.readiness);
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
 
@@ -256,6 +262,15 @@ function renderSafetyGuardrails(data) {
       `<article class="card"><div class="label">${label}</div><div class="small-value ${klass}">${value}</div></article>`
     )
     .join('');
+}
+function renderReadiness(readiness) {
+  if (!readiness) return;
+  const summary = `${readiness.status}: ${readiness.message}`;
+  document.getElementById('readinessSummary').textContent = summary;
+  document.getElementById('readinessChecks').innerHTML = readiness.checks.map(check => {
+    const icon = check.passed ? '✅' : '⏳';
+    return `<li><strong class="${check.level}">${icon} ${check.label}</strong> — ${check.message}</li>`;
+  }).join('');
 }
 function renderDiagnostics(diagnostics) {
   if (!diagnostics) return;
@@ -594,6 +609,7 @@ def _snapshot_unlocked() -> dict:
     snapshot["last_backtest"] = last_backtest
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
+    snapshot["readiness"] = _readiness_payload(snapshot, snapshot["diagnostics"])
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
     return snapshot
 
@@ -651,6 +667,84 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     }
 
 
+def _readiness_payload(snapshot: dict, diagnostics: dict) -> dict:
+    config = snapshot.get("config", {})
+    grid_plan = snapshot.get("grid_plan", {})
+    starting_balance = config.get("starting_balance", 0.0)
+    equity = snapshot.get("equity", 0.0)
+    closed_trades = snapshot.get("closed_trades", 0)
+    profit_factor = diagnostics.get("profit_factor")
+    expectancy = diagnostics.get("expectancy", 0.0)
+    committed = grid_plan.get("total_committed_notional", 0.0)
+    max_notional = grid_plan.get("max_notional", 0.0)
+    last_report = snapshot.get("last_backtest")
+
+    min_closed_trades = 30
+    checks = [
+        {
+            "label": "Sample size",
+            "passed": closed_trades >= min_closed_trades,
+            "message": f"Need at least {min_closed_trades} closed simulated trades; current run has {closed_trades}.",
+        },
+        {
+            "label": "Current run PnL",
+            "passed": equity > starting_balance,
+            "message": f"Equity must be above starting balance before testnet; current delta is ${equity - starting_balance:,.2f}.",
+        },
+        {
+            "label": "Closed-trade edge",
+            "passed": closed_trades >= min_closed_trades and profit_factor is not None and profit_factor >= 1.05 and expectancy > 0,
+            "message": f"Need profit factor >= 1.05 and positive expectancy; current PF is {diagnostics.get('profit_factor_label') or profit_factor or 'n/a'} and expectancy is ${expectancy:,.2f}.",
+        },
+        {
+            "label": "Exposure cap",
+            "passed": max_notional > 0 and committed <= max_notional,
+            "message": f"Committed notional is ${committed:,.2f} of ${max_notional:,.2f} cap.",
+        },
+        {
+            "label": "Risk locks",
+            "passed": snapshot.get("trading_enabled", False) and not snapshot.get("lock_reason"),
+            "message": snapshot.get("lock_reason") or "No daily loss/profit/manual lock is active.",
+        },
+        {
+            "label": "Public live feed",
+            "passed": snapshot.get("price_source") == "binance_public",
+            "message": f"Price source is {snapshot.get('price_source', 'unknown')}.",
+        },
+        {
+            "label": "Backtest gate",
+            "passed": bool(
+                last_report
+                and last_report.get("ending_equity", 0) > last_report.get("starting_balance", 0)
+                and last_report.get("max_drawdown_pct", 999) <= config.get("max_daily_loss_pct", 0) * 100
+            ),
+            "message": _backtest_gate_message(last_report, config),
+        },
+    ]
+
+    for check in checks:
+        check["level"] = "good" if check["passed"] else "warn"
+
+    ready = all(check["passed"] for check in checks)
+    status = "READY_FOR_TESTNET" if ready else "NOT_READY"
+    message = (
+        "All paper gates passed; next step should still be Binance Futures testnet, not live funds."
+        if ready
+        else "Do not connect live keys yet. Keep collecting fills, close trades, and pass the backtest gate first."
+    )
+    return {"status": status, "message": message, "checks": checks}
+
+
+def _backtest_gate_message(last_report: dict | None, config: dict) -> str:
+    if not last_report:
+        return "Run the quick synthetic backtest and require positive ending equity within drawdown limits."
+    return (
+        f"Backtest equity ${last_report.get('ending_equity', 0):,.2f} vs "
+        f"${last_report.get('starting_balance', 0):,.2f}; max drawdown "
+        f"{last_report.get('max_drawdown_pct', 0):.2f}% allowed "
+        f"{config.get('max_daily_loss_pct', 0) * 100:.2f}%."
+    )
+
 def _review_notes_payload(snapshot: dict, diagnostics: dict) -> list[dict[str, str]]:
     notes = []
     closed_trades = snapshot.get("closed_trades", 0)
@@ -659,6 +753,14 @@ def _review_notes_payload(snapshot: dict, diagnostics: dict) -> list[dict[str, s
     open_exposure = diagnostics.get("open_exposure", 0.0)
     equity = snapshot.get("equity", 0.0)
     exposure_pct = (open_exposure / equity * 100) if equity else 0.0
+
+    readiness = snapshot.get("readiness", {})
+    if readiness.get("status") == "NOT_READY":
+        notes.append({
+            "label": "Not live-ready",
+            "message": readiness.get("message", "Keep the simulator in paper mode."),
+            "level": "bad",
+        })
 
     if closed_trades < 10:
         notes.append({
