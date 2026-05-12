@@ -21,6 +21,8 @@ class BotConfig:
     leverage: float = 2.0
     base_order_risk_pct: float = 0.0125
     max_open_positions: int = 6
+    max_pending_orders: int = 12
+    max_pending_orders_per_side: int = 6
     max_total_notional_pct: float = 0.30
     stale_order_grid_steps: float = 3.0
     max_daily_loss_pct: float = 0.025
@@ -49,6 +51,12 @@ class BotConfig:
             raise ValueError("base_order_risk_pct must be > 0 and <= 5%.")
         if self.max_open_positions < 1:
             raise ValueError("max_open_positions must be at least 1.")
+        if self.max_pending_orders < 1:
+            raise ValueError("max_pending_orders must be at least 1.")
+        if self.max_pending_orders_per_side < 1:
+            raise ValueError("max_pending_orders_per_side must be at least 1.")
+        if self.max_pending_orders_per_side > self.max_pending_orders:
+            raise ValueError("max_pending_orders_per_side cannot exceed max_pending_orders.")
         if not 0 < self.max_total_notional_pct <= 1:
             raise ValueError("max_total_notional_pct must be > 0 and <= 100%.")
         if self.stale_order_grid_steps <= 0:

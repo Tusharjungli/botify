@@ -73,8 +73,8 @@ def test_emergency_stop_cancels_orders_and_locks_entries():
     assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
 
 
-def test_pending_orders_count_against_position_limit():
-    config = BotConfig(cooldown_ticks=1, max_open_positions=1)
+def test_pending_orders_have_separate_capacity_from_positions():
+    config = BotConfig(cooldown_ticks=1, max_open_positions=1, max_pending_orders=2, max_pending_orders_per_side=1)
     engine = GridEngine(config)
     engine.state.exchange.submit_limit_order(
         side="BUY", price=99_000, quantity=0.01, tag="grid_entry:LONG"
@@ -83,8 +83,10 @@ def test_pending_orders_count_against_position_limit():
     snapshot = engine.snapshot()
 
     assert len(snapshot["open_orders"]) == 1
-    assert snapshot["grid_plan"]["slots_used"] == 1
-    assert snapshot["grid_plan"]["slots_remaining"] == 0
+    assert snapshot["grid_plan"]["slots_used"] == 0
+    assert snapshot["grid_plan"]["slots_remaining"] == 1
+    assert snapshot["grid_plan"]["pending_slots_used"] == 1
+    assert snapshot["grid_plan"]["pending_slots_remaining"] == 1
 
 
 def test_notional_cap_blocks_new_grid_orders():
@@ -146,3 +148,18 @@ def test_entries_use_passive_grid_levels_not_nearest_marketable_price():
 
     assert order["side"] == "SELL"
     assert order["price"] > snapshot["price"]
+
+
+def test_pending_order_capacity_blocks_new_grid_orders():
+    config = BotConfig(cooldown_ticks=1, max_pending_orders=1, max_pending_orders_per_side=1)
+    engine = GridEngine(config)
+    engine.state.exchange.submit_limit_order(
+        side="SELL", price=101_000, quantity=0.01, tag="grid_entry:SHORT"
+    )
+
+    for _ in range(25):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    assert len(snapshot["open_orders"]) == 1
+    assert snapshot["grid_plan"]["pending_slots_remaining"] == 0

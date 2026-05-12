@@ -171,9 +171,11 @@ class GridEngine:
         max_notional = equity * self.config.max_total_notional_pct if equity > 0 else 0.0
         next_margin = self.state.balance * self.config.base_order_risk_pct
         next_notional = next_margin * self.config.leverage
-        slots_used = len(self.state.positions) + len(
-            [order for order in open_orders if order.tag.startswith("grid_entry")]
-        )
+        entry_orders = [order for order in open_orders if order.tag.startswith("grid_entry")]
+        position_slots_used = len(self.state.positions)
+        pending_slots_used = len(entry_orders)
+        long_pending = sum(1 for order in entry_orders if order.side == "BUY")
+        short_pending = sum(1 for order in entry_orders if order.side == "SELL")
         spacing_pct = 0.0
         if len(grid) >= 2 and price:
             spacing_pct = (grid[1] - grid[0]) / price * 100
@@ -182,8 +184,12 @@ class GridEngine:
             "upper": grid[-1] if grid else None,
             "step": (grid[1] - grid[0]) if len(grid) >= 2 else 0.0,
             "spacing_pct": spacing_pct,
-            "slots_used": slots_used,
-            "slots_remaining": max(0, self.config.max_open_positions - slots_used),
+            "slots_used": position_slots_used,
+            "slots_remaining": max(0, self.config.max_open_positions - position_slots_used),
+            "pending_slots_used": pending_slots_used,
+            "pending_slots_remaining": max(0, self.config.max_pending_orders - pending_slots_used),
+            "long_pending_orders": long_pending,
+            "short_pending_orders": short_pending,
             "open_notional": open_notional,
             "pending_notional": pending_notional,
             "total_committed_notional": open_notional + pending_notional,
@@ -257,7 +263,13 @@ class GridEngine:
             for order in self.state.exchange.open_orders()
             if order.tag.startswith("grid_entry")
         ]
-        if len(self.state.positions) + len(open_entry_orders) >= self.config.max_open_positions:
+        if len(self.state.positions) >= self.config.max_open_positions:
+            return
+        if len(open_entry_orders) >= self.config.max_pending_orders:
+            return
+        expected_order_side = "BUY" if allowed_side == "LONG" else "SELL"
+        side_pending = sum(1 for order in open_entry_orders if order.side == expected_order_side)
+        if side_pending >= self.config.max_pending_orders_per_side:
             return
 
         nearby_position_exists = any(abs(position.entry_price - price) < step * 0.55 for position in self.state.positions)
