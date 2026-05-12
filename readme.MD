@@ -9,7 +9,7 @@ Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a
 - ✅ BTC-only simulator dashboard for `BTCUSDT`.
 - ✅ Public Binance BTC price feed with deterministic offline fallback.
 - ✅ Simulated balance, realized PnL, unrealized PnL, win rate, paper orders, fills, open positions, and recent trades.
-- ✅ Moderate-risk defaults: low per-order risk, separate open-position and pending-order capacity, passive grid entries, total committed-notional cap, spike-tick order cancel/cooldown, stale pending-order cleanup, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
+- ✅ Moderate-risk defaults: low per-order risk, separate open-position and pending-order capacity, balanced long/short range ladders, passive grid entries, total committed-notional cap, spike-tick order cancel/cooldown, stale pending-order cleanup, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
 - ✅ Beginner-friendly BTC backtest command.
 - ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, live-readiness checks, profit-stage guidance, and BTC price chart.
 - ✅ Local Binance Futures-style emulator with symbol filters, mark price status, liquidation estimates, and a read-only testnet adapter skeleton.
@@ -81,7 +81,7 @@ The localhost dashboard includes beginner-friendly controls:
 - **Live Readiness** — blocks moving to testnet/live until the run has enough closed trades, positive equity, a closed-trade edge, cap compliance, no risk locks, a public Binance price source, and a passing backtest gate.
 - **Profit Stages** — explain when unrealized PnL can become realized profit: entry fill, first exit, 30+ trade sample, positive paper edge, and confirming backtest.
 - **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, whether the run is not live-ready, and how much simulated exposure is open.
-- **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions.
+- **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions. In range mode, pending orders are built as a balanced ladder below and above the current BTC price rather than repeatedly stacking one side.
 - **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
 - **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, spike guard, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.

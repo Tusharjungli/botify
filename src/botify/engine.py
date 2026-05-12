@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from statistics import mean
 
 from .config import BotConfig
 from .exchange import ExchangeAdapter, Order, PaperExchange
@@ -246,18 +245,11 @@ class GridEngine:
 
         grid = self.state.grid
         step = grid[1] - grid[0]
-        middle = mean((grid[0], grid[-1]))
         index = min(range(len(grid)), key=lambda i: abs(grid[i] - price))
 
-        allowed_side: str | None
-        if self.state.mode == "RANGE":
-            allowed_side = "LONG" if price < middle else "SHORT"
-        elif self.state.mode == "UPTREND":
-            allowed_side = "LONG"
-        else:
-            allowed_side = "SHORT"
+        candidate_sides = self._candidate_entry_sides()
 
-        self._cancel_stale_entry_orders(price=price, allowed_side=allowed_side, step=step)
+        self._cancel_stale_entry_orders(price=price, allowed_sides=candidate_sides, step=step)
         open_entry_orders = [
             order
             for order in self.state.exchange.open_orders()
@@ -267,15 +259,6 @@ class GridEngine:
             return
         if len(open_entry_orders) >= self.config.max_pending_orders:
             return
-        expected_order_side = "BUY" if allowed_side == "LONG" else "SELL"
-        side_pending = sum(1 for order in open_entry_orders if order.side == expected_order_side)
-        if side_pending >= self.config.max_pending_orders_per_side:
-            return
-
-        nearby_position_exists = any(abs(position.entry_price - price) < step * 0.55 for position in self.state.positions)
-        nearby_order_exists = any(abs(order.price - price) < step * 0.55 for order in open_entry_orders)
-        if nearby_position_exists or nearby_order_exists:
-            return
 
         margin = self.state.balance * self.config.base_order_risk_pct
         notional = margin * self.config.leverage
@@ -284,7 +267,17 @@ class GridEngine:
         if not self._within_notional_cap(price, notional, open_entry_orders):
             return
 
-        order_index = self._passive_order_index(index, allowed_side, len(grid))
+        entry_candidate = self._select_entry_candidate(
+            candidate_sides=candidate_sides,
+            nearest_index=index,
+            grid_size=len(grid),
+            step=step,
+            open_entry_orders=open_entry_orders,
+        )
+        if not entry_candidate:
+            return
+
+        allowed_side, order_index = entry_candidate
         order_price = grid[order_index]
         quantity = notional / order_price
         self.state.exchange.submit_limit_order(
@@ -296,18 +289,61 @@ class GridEngine:
         )
         self.state.cooldown_until_tick = self.state.tick_count + self.config.cooldown_ticks
 
-    def _passive_order_index(self, nearest_index: int, side: str, grid_size: int) -> int:
-        if side == "LONG":
-            return max(0, nearest_index - 1)
-        return min(grid_size - 1, nearest_index + 1)
+    def _candidate_entry_sides(self) -> tuple[str, ...]:
+        if self.state.mode == "RANGE":
+            return ("LONG", "SHORT")
+        if self.state.mode == "UPTREND":
+            return ("LONG",)
+        return ("SHORT",)
 
-    def _cancel_stale_entry_orders(self, *, price: float, allowed_side: str, step: float) -> None:
-        expected_order_side = "BUY" if allowed_side == "LONG" else "SELL"
+    def _select_entry_candidate(
+        self,
+        *,
+        candidate_sides: tuple[str, ...],
+        nearest_index: int,
+        grid_size: int,
+        step: float,
+        open_entry_orders: list[Order],
+    ) -> tuple[str, int] | None:
+        ranked: list[tuple[int, int, str, int]] = []
+        for side in candidate_sides:
+            expected_order_side = "BUY" if side == "LONG" else "SELL"
+            side_pending = sum(1 for order in open_entry_orders if order.side == expected_order_side)
+            if side_pending >= self.config.max_pending_orders_per_side:
+                continue
+
+            side_positions = sum(1 for position in self.state.positions if position.side == side)
+            depth = side_pending + side_positions + 1
+            order_index = self._passive_order_index(nearest_index, side, grid_size, depth)
+            order_price = self.state.grid[order_index]
+            if self._has_nearby_entry(price=order_price, step=step, open_entry_orders=open_entry_orders):
+                continue
+            ranked.append((side_pending + side_positions, side_pending, side, order_index))
+
+        if not ranked:
+            return None
+        _, _, side, order_index = min(ranked)
+        return side, order_index
+
+    def _has_nearby_entry(self, *, price: float, step: float, open_entry_orders: list[Order]) -> bool:
+        nearby_position_exists = any(
+            abs(position.entry_price - price) < step * 0.55 for position in self.state.positions
+        )
+        nearby_order_exists = any(abs(order.price - price) < step * 0.55 for order in open_entry_orders)
+        return nearby_position_exists or nearby_order_exists
+
+    def _passive_order_index(self, nearest_index: int, side: str, grid_size: int, depth: int = 1) -> int:
+        if side == "LONG":
+            return max(0, nearest_index - depth)
+        return min(grid_size - 1, nearest_index + depth)
+
+    def _cancel_stale_entry_orders(self, *, price: float, allowed_sides: tuple[str, ...], step: float) -> None:
+        allowed_order_sides = {"BUY" if side == "LONG" else "SELL" for side in allowed_sides}
         for order in self.state.exchange.open_orders():
             if not order.tag.startswith("grid_entry"):
                 continue
             too_far_from_grid = abs(order.price - price) > step * self.config.stale_order_grid_steps
-            wrong_side_for_mode = order.side != expected_order_side
+            wrong_side_for_mode = order.side not in allowed_order_sides
             if too_far_from_grid or wrong_side_for_mode:
                 self.state.exchange.cancel_order(order.order_id)
 

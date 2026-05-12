@@ -24,7 +24,7 @@ class BotConfig:
     max_pending_orders: int = 12
     max_pending_orders_per_side: int = 6
     max_total_notional_pct: float = 0.30
-    stale_order_grid_steps: float = 3.0
+    stale_order_grid_steps: float = 6.5
     max_daily_loss_pct: float = 0.025
     daily_profit_lock_pct: float = 0.035
     stop_loss_pct: float = 0.012
