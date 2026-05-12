@@ -40,6 +40,7 @@ PAGE = """
     header { padding: 24px; background: linear-gradient(135deg, #172554, #111827); border-bottom: 1px solid #23304d; }
     main { padding: 24px; display: grid; gap: 18px; }
     .cards, .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+    .safety-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
     .card, .panel, table { background: #111827; border: 1px solid #23304d; border-radius: 16px; box-shadow: 0 16px 32px #0004; }
     .card, .panel { padding: 16px; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -48,13 +49,13 @@ PAGE = """
     button.warning { background: #fbbf24; }
     button:hover { filter: brightness(1.08); }
     .label { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-    .value { margin-top: 8px; font-size: 24px; font-weight: 800; }
-    .small-value { margin-top: 8px; font-size: 18px; font-weight: 700; }
+    .value { margin-top: 8px; font-size: 24px; font-weight: 800; overflow-wrap: anywhere; }
+    .small-value { margin-top: 8px; font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
     .good { color: #34d399; } .bad { color: #fb7185; } .warn { color: #fbbf24; }
     table { width: 100%; border-collapse: collapse; overflow: hidden; }
     th, td { padding: 12px 14px; border-bottom: 1px solid #23304d; text-align: left; font-size: 14px; }
     th { color: #93a4bd; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #1e293b; }
+    .pill { display: inline-block; max-width: 100%; padding: 4px 10px; border-radius: 999px; background: #1e293b; overflow-wrap: anywhere; }
     .note { color: #a8b3c7; line-height: 1.5; max-width: 980px; }
     .review-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
     .review-list li { padding: 12px 14px; border: 1px solid #23304d; border-radius: 12px; background: #0f172a; color: #cbd5e1; }
@@ -84,6 +85,21 @@ PAGE = """
       <p class="status-line" id="statusLine">Loading dashboard state...</p>
     </section>
     <section class="cards" id="cards"></section>
+    <section class="panel">
+      <h2>Safety Guardrails</h2>
+      <p class="note">Binance-style grid controls shown separately so pending exposure and caps are always visible before any live trading integration.</p>
+      <div class="cards safety-grid" id="safetyGuardrails"></div>
+    </section>
+    <section class="panel">
+      <h2>Live Readiness</h2>
+      <p class="note" id="readinessSummary">Waiting for readiness checks...</p>
+      <ul class="review-list" id="readinessChecks"><li>Collecting checks...</li></ul>
+    </section>
+    <section class="panel">
+      <h2>Profit Stages</h2>
+      <p class="note" id="profitStageSummary">Waiting for profit-stage checks...</p>
+      <ul class="review-list" id="profitStageChecks"><li>Collecting profit stages...</li></ul>
+    </section>
     <section>
       <h2>Trade Diagnostics</h2>
       <div class="cards" id="diagnostics"></div>
@@ -133,7 +149,19 @@ PAGE = """
 const money = (n) => Number(n).toLocaleString(undefined, {style: 'currency', currency: 'USD'});
 const num = (n, d=2) => Number(n).toLocaleString(undefined, {maximumFractionDigits: d});
 function pnlClass(n) { return Number(n) >= 0 ? 'good' : 'bad'; }
-function factorClass(n) { return n === null || Number(n) >= 1 ? 'good' : 'bad'; }
+function factorClass(n) {
+  if (n === null || n === undefined) return '';
+  return Number(n) >= 1 ? 'good' : 'bad';
+}
+function factorText(n, label = null) {
+  if (label) return label;
+  if (n === null || n === undefined) return 'n/a';
+  if (!Number.isFinite(Number(n))) return 'infinite';
+  return num(n);
+}
+function sourceLabel(source) {
+  return source === 'binance_public' ? 'Binance public' : source;
+}
 async function postJson(path) {
   const response = await fetch(path, {method: 'POST'});
   if (!response.ok) throw new Error(`${path} failed with ${response.status}`);
@@ -154,7 +182,7 @@ function renderDashboard(data) {
   document.getElementById('statusLine').textContent = data.control_message ? `${data.control_message} ${statusText}` : statusText;
   document.getElementById('cards').innerHTML = [
     ['BTC Price', money(data.price), ''],
-    ['Price Source', `<span class="pill">${data.price_source}</span>`, ''],
+    ['Price Source', `<span class="pill">${sourceLabel(data.price_source)}</span>`, ''],
     ['Mode', `<span class="pill">${data.mode}</span>`, ''],
     ['Simulator', data.paused ? 'Paused' : 'Running', data.paused ? 'warn' : 'good'],
     ['Equity', money(data.equity), pnlClass(data.equity - data.config.starting_balance)],
@@ -167,6 +195,9 @@ function renderDashboard(data) {
     ['Closed Trades', data.closed_trades, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 
+  renderSafetyGuardrails(data);
+  renderReadiness(data.readiness);
+  renderProfitStage(data.profit_stage);
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
 
@@ -178,6 +209,10 @@ function renderDashboard(data) {
     ['Leverage', `${num(data.config.leverage)}x`],
     ['Order Risk', `${num(data.config.base_order_risk_pct * 100)}%`],
     ['Max Open Positions', data.config.max_open_positions],
+    ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`],
+    ['Stale Order Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`],
+    ['Spike Guard', `${num(data.config.max_tick_jump_pct * 100)}% / tick`],
+    ['Spike Cooldown', `${data.config.spike_cooldown_ticks} ticks`],
     ['Daily Loss Lock', `${num(data.config.max_daily_loss_pct * 100)}%`],
     ['Profit Lock', `${num(data.config.daily_profit_lock_pct * 100)}%`],
     ['Stop Loss', `${num(data.config.stop_loss_pct * 100)}%`],
@@ -204,20 +239,77 @@ function renderDashboard(data) {
   drawChart(data.chart);
   if (data.last_backtest) renderBacktest(data.last_backtest);
 }
+function renderSafetyGuardrails(data) {
+  const plan = data.grid_plan || {};
+  const diagnostics = data.diagnostics || {};
+  const exchange = data.exchange || {};
+  const capClass = diagnostics.committed_notional_pct > 20 ? 'warn' : 'good';
+  const cards = [
+    [
+      'Committed / Cap',
+      `${money(plan.total_committed_notional || 0)} / ${money(plan.max_notional || 0)}`,
+      capClass,
+    ],
+    [
+      'Open + Pending',
+      `${money(plan.open_notional || 0)} + ${money(plan.pending_notional || 0)}`,
+      (plan.pending_notional || 0) ? 'warn' : '',
+    ],
+    [
+      'Grid Slots',
+      `${plan.slots_used || 0} used / ${plan.slots_remaining || 0} left`,
+      (plan.slots_remaining || 0) ? 'good' : 'warn',
+    ],
+    ['Next Order', money(plan.next_order_notional || 0), plan.next_order_allowed_by_cap ? 'good' : 'bad'],
+    ['Next Allowed', plan.next_order_allowed_by_cap ? 'Yes' : 'Blocked by cap', plan.next_order_allowed_by_cap ? 'good' : 'bad'],
+    ['Grid Spacing', `${num(plan.spacing_pct || 0, 3)}%`, ''],
+    ['Stale Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`, ''],
+    ['Spike Guard', `${num(data.config.max_tick_jump_pct * 100)}% / tick`, ''],
+    ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`, ''],
+    ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
+    ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
+  ];
+  document.getElementById('safetyGuardrails').innerHTML = cards
+    .map(([label, value, klass]) =>
+      `<article class="card"><div class="label">${label}</div><div class="small-value ${klass}">${value}</div></article>`
+    )
+    .join('');
+}
+function renderReadiness(readiness) {
+  if (!readiness) return;
+  const summary = `${readiness.status}: ${readiness.message}`;
+  document.getElementById('readinessSummary').textContent = summary;
+  document.getElementById('readinessChecks').innerHTML = readiness.checks.map(check => {
+    const icon = check.passed ? '✅' : '⏳';
+    return `<li><strong class="${check.level}">${icon} ${check.label}</strong> — ${check.message}</li>`;
+  }).join('');
+}
+function renderProfitStage(profitStage) {
+  if (!profitStage) return;
+  document.getElementById('profitStageSummary').textContent = profitStage.summary;
+  document.getElementById('profitStageChecks').innerHTML = profitStage.stages.map(stage => {
+    const icon = stage.passed ? '✅' : '⏳';
+    return `<li><strong class="${stage.level}">${icon} ${stage.label}</strong> — ${stage.message}</li>`;
+  }).join('');
+}
 function renderDiagnostics(diagnostics) {
   if (!diagnostics) return;
   document.getElementById('diagnostics').innerHTML = [
     ['Open Exposure', money(diagnostics.open_exposure), ''],
+    ['Pending Exposure', money(diagnostics.pending_exposure), diagnostics.pending_exposure ? 'warn' : ''],
+    ['Committed Cap', `${num(diagnostics.committed_notional_pct)}%`, diagnostics.committed_notional_pct > 20 ? 'warn' : ''],
+    ['Grid Slots', `${diagnostics.grid_slots_used} used / ${diagnostics.grid_slots_remaining} left`, diagnostics.grid_slots_remaining ? '' : 'warn'],
     ['Open Positions', diagnostics.open_positions, ''],
     ['Long / Short', `${diagnostics.long_positions} / ${diagnostics.short_positions}`, ''],
     ['Gross Profit', money(diagnostics.gross_profit), 'good'],
     ['Gross Loss', money(-diagnostics.gross_loss), 'bad'],
-    ['Profit Factor', diagnostics.profit_factor === null ? 'infinite' : num(diagnostics.profit_factor), factorClass(diagnostics.profit_factor)],
+    ['Profit Factor', factorText(diagnostics.profit_factor, diagnostics.profit_factor_label), factorClass(diagnostics.profit_factor)],
     ['Avg Win', money(diagnostics.average_win), pnlClass(diagnostics.average_win)],
     ['Avg Loss', money(diagnostics.average_loss), pnlClass(diagnostics.average_loss)],
     ['Expectancy', money(diagnostics.expectancy), pnlClass(diagnostics.expectancy)],
     ['Trend Flip Exits', diagnostics.trend_flip_exits, diagnostics.trend_flip_exits ? 'warn' : ''],
     ['Grid Width', `${num(diagnostics.grid_width_pct)}%`, ''],
+    ['Grid Spacing', `${num(diagnostics.grid_spacing_pct, 3)}%`, ''],
     ['Nearest Target', diagnostics.nearest_target_distance_pct === null ? 'n/a' : `${num(diagnostics.nearest_target_distance_pct)}%`, ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 }
@@ -403,6 +495,7 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
+        self._send_no_store_headers()
         self.end_headers()
         self._safe_write(encoded)
 
@@ -411,6 +504,7 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(encoded)))
+        self._send_no_store_headers()
         self.end_headers()
         self._safe_write(encoded)
 
@@ -420,8 +514,13 @@ class BotifyHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Disposition", 'attachment; filename="botify_trades.csv"')
         self.send_header("Content-Length", str(len(encoded)))
+        self._send_no_store_headers()
         self.end_headers()
         self._safe_write(encoded)
+
+    def _send_no_store_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Pragma", "no-cache")
 
     def _safe_write(self, encoded: bytes) -> None:
         try:
@@ -530,6 +629,8 @@ def _snapshot_unlocked() -> dict:
     snapshot["last_backtest"] = last_backtest
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
+    snapshot["readiness"] = _readiness_payload(snapshot, snapshot["diagnostics"])
+    snapshot["profit_stage"] = _profit_stage_payload(snapshot, snapshot["diagnostics"])
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
     return snapshot
 
@@ -540,11 +641,16 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     losses = [trade.pnl for trade in trades if trade.pnl < 0]
     gross_profit = sum(wins)
     gross_loss = abs(sum(losses))
-    profit_factor = (
-        math.inf
-        if gross_profit and gross_loss == 0
-        else (gross_profit / gross_loss if gross_loss else 0.0)
-    )
+    closed_trades = len(trades)
+    profit_factor_label = None
+    if not closed_trades:
+        profit_factor = None
+        profit_factor_label = "n/a"
+    elif gross_profit and gross_loss == 0:
+        profit_factor = None
+        profit_factor_label = "infinite"
+    else:
+        profit_factor = gross_profit / gross_loss if gross_loss else 0.0
     positions = snapshot.get("positions", [])
     price = snapshot.get("price", 0.0)
     grid = snapshot.get("grid", [])
@@ -553,10 +659,19 @@ def _diagnostics_payload(snapshot: dict) -> dict:
         for position in positions
         if price
     ]
-    closed_trades = len(trades)
     expectancy = sum(trade.pnl for trade in trades) / closed_trades if closed_trades else 0.0
+    equity = snapshot.get("equity", 0.0)
+    grid_plan = snapshot.get("grid_plan", {})
+    open_exposure = sum(position["notional"] for position in positions)
+    pending_exposure = grid_plan.get("pending_notional", 0.0)
+    committed_notional = grid_plan.get("total_committed_notional", open_exposure + pending_exposure)
     return {
-        "open_exposure": sum(position["notional"] for position in positions),
+        "open_exposure": open_exposure,
+        "pending_exposure": pending_exposure,
+        "committed_notional_pct": (committed_notional / equity * 100) if equity else 0.0,
+        "grid_slots_used": grid_plan.get("slots_used", len(positions)),
+        "grid_slots_remaining": grid_plan.get("slots_remaining", 0),
+        "grid_spacing_pct": grid_plan.get("spacing_pct", 0.0),
         "open_positions": len(positions),
         "long_positions": sum(1 for position in positions if position["side"] == "LONG"),
         "short_positions": sum(1 for position in positions if position["side"] == "SHORT"),
@@ -564,13 +679,174 @@ def _diagnostics_payload(snapshot: dict) -> dict:
         "average_loss": sum(losses) / len(losses) if losses else 0.0,
         "gross_profit": gross_profit,
         "gross_loss": gross_loss,
-        "profit_factor": None if math.isinf(profit_factor) else profit_factor,
+        "profit_factor": profit_factor,
+        "profit_factor_label": profit_factor_label,
         "expectancy": expectancy,
         "trend_flip_exits": sum(1 for trade in trades if trade.reason == "trend_flip"),
         "grid_width_pct": ((grid[-1] - grid[0]) / price * 100) if grid and price else 0.0,
         "nearest_target_distance_pct": min(target_distances) if target_distances else None,
     }
 
+
+def _profit_stage_payload(snapshot: dict, diagnostics: dict) -> dict:
+    config = snapshot.get("config", {})
+    positions = snapshot.get("positions", [])
+    closed_trades = snapshot.get("closed_trades", 0)
+    price = snapshot.get("price", 0.0)
+    equity_delta = snapshot.get("equity", 0.0) - config.get("starting_balance", 0.0)
+    profit_factor = diagnostics.get("profit_factor")
+    expectancy = diagnostics.get("expectancy", 0.0)
+    last_report = snapshot.get("last_backtest")
+    next_target = _next_profit_target_message(positions, price)
+
+    stages = [
+        {
+            "label": "1. Entry filled",
+            "passed": bool(positions or closed_trades),
+            "message": "A paper order must fill before any PnL can move.",
+        },
+        {
+            "label": "2. First realized close",
+            "passed": closed_trades >= 1,
+            "message": next_target,
+        },
+        {
+            "label": "3. Useful sample",
+            "passed": closed_trades >= 30,
+            "message": f"Need 30+ closed trades before judging edge; current run has {closed_trades}.",
+        },
+        {
+            "label": "4. Paper edge",
+            "passed": profit_factor is not None and profit_factor >= 1.05 and expectancy > 0 and equity_delta > 0,
+            "message": (
+                f"Need PF >= 1.05, positive expectancy, and positive equity; "
+                f"current equity delta is ${equity_delta:,.2f}."
+            ),
+        },
+        {
+            "label": "5. Backtest confirms",
+            "passed": bool(
+                last_report
+                and last_report.get("ending_equity", 0) > last_report.get("starting_balance", 0)
+                and last_report.get("profit_factor", 0) >= 1.05
+            ),
+            "message": _profit_backtest_message(last_report),
+        },
+    ]
+    for stage in stages:
+        stage["level"] = "good" if stage["passed"] else "warn"
+
+    current_stage = next((stage["label"] for stage in stages if not stage["passed"]), "Ready for testnet proof")
+    summary = (
+        "Unrealized PnL moves while positions are open; realized profit only appears after "
+        f"a target/trailing/exit closes. Current stage: {current_stage}."
+    )
+    return {"summary": summary, "stages": stages}
+
+
+def _next_profit_target_message(positions: list[dict], price: float) -> str:
+    if not positions:
+        return "No open position yet; realized profit appears after an entry fills and exits above fees."
+
+    def distance(position: dict) -> float:
+        return abs(position.get("target_price", price) - price)
+
+    position = min(positions, key=distance)
+    target = position.get("target_price", 0.0)
+    side = position.get("side", "position")
+    direction = "rise to" if side == "LONG" else "fall to"
+    distance_pct = abs(target - price) / price * 100 if price else 0.0
+    return (
+        f"For the nearest {side}, price needs to {direction} ${target:,.2f} "
+        f"(about {distance_pct:.2f}% away) before grid take-profit can realize gains."
+    )
+
+
+def _profit_backtest_message(last_report: dict | None) -> str:
+    if not last_report:
+        return "Run the quick backtest; profits are not trusted until backtest return and PF are positive."
+    return (
+        f"Backtest return {last_report.get('total_return_pct', 0):.2f}% with "
+        f"PF {last_report.get('profit_factor') or 'n/a'}."
+    )
+
+def _readiness_payload(snapshot: dict, diagnostics: dict) -> dict:
+    config = snapshot.get("config", {})
+    grid_plan = snapshot.get("grid_plan", {})
+    starting_balance = config.get("starting_balance", 0.0)
+    equity = snapshot.get("equity", 0.0)
+    closed_trades = snapshot.get("closed_trades", 0)
+    profit_factor = diagnostics.get("profit_factor")
+    expectancy = diagnostics.get("expectancy", 0.0)
+    committed = grid_plan.get("total_committed_notional", 0.0)
+    max_notional = grid_plan.get("max_notional", 0.0)
+    last_report = snapshot.get("last_backtest")
+
+    min_closed_trades = 30
+    checks = [
+        {
+            "label": "Sample size",
+            "passed": closed_trades >= min_closed_trades,
+            "message": f"Need at least {min_closed_trades} closed simulated trades; current run has {closed_trades}.",
+        },
+        {
+            "label": "Current run PnL",
+            "passed": equity > starting_balance,
+            "message": f"Equity must be above starting balance before testnet; current delta is ${equity - starting_balance:,.2f}.",
+        },
+        {
+            "label": "Closed-trade edge",
+            "passed": closed_trades >= min_closed_trades and profit_factor is not None and profit_factor >= 1.05 and expectancy > 0,
+            "message": f"Need profit factor >= 1.05 and positive expectancy; current PF is {diagnostics.get('profit_factor_label') or profit_factor or 'n/a'} and expectancy is ${expectancy:,.2f}.",
+        },
+        {
+            "label": "Exposure cap",
+            "passed": max_notional > 0 and committed <= max_notional,
+            "message": f"Committed notional is ${committed:,.2f} of ${max_notional:,.2f} cap.",
+        },
+        {
+            "label": "Risk locks",
+            "passed": snapshot.get("trading_enabled", False) and not snapshot.get("lock_reason"),
+            "message": snapshot.get("lock_reason") or "No daily loss/profit/manual lock is active.",
+        },
+        {
+            "label": "Public live feed",
+            "passed": snapshot.get("price_source") == "binance_public",
+            "message": f"Price source is {snapshot.get('price_source', 'unknown')}.",
+        },
+        {
+            "label": "Backtest gate",
+            "passed": bool(
+                last_report
+                and last_report.get("ending_equity", 0) > last_report.get("starting_balance", 0)
+                and last_report.get("max_drawdown_pct", 999) <= config.get("max_daily_loss_pct", 0) * 100
+            ),
+            "message": _backtest_gate_message(last_report, config),
+        },
+    ]
+
+    for check in checks:
+        check["level"] = "good" if check["passed"] else "warn"
+
+    ready = all(check["passed"] for check in checks)
+    status = "READY_FOR_TESTNET" if ready else "NOT_READY"
+    message = (
+        "All paper gates passed; next step should still be Binance Futures testnet, not live funds."
+        if ready
+        else "Do not connect live keys yet. Keep collecting fills, close trades, and pass the backtest gate first."
+    )
+    return {"status": status, "message": message, "checks": checks}
+
+
+def _backtest_gate_message(last_report: dict | None, config: dict) -> str:
+    if not last_report:
+        return "Run the quick synthetic backtest and require positive ending equity within drawdown limits."
+    return (
+        f"Backtest equity ${last_report.get('ending_equity', 0):,.2f} vs "
+        f"${last_report.get('starting_balance', 0):,.2f}; max drawdown "
+        f"{last_report.get('max_drawdown_pct', 0):.2f}% allowed "
+        f"{config.get('max_daily_loss_pct', 0) * 100:.2f}%."
+    )
 
 def _review_notes_payload(snapshot: dict, diagnostics: dict) -> list[dict[str, str]]:
     notes = []
@@ -580,6 +856,14 @@ def _review_notes_payload(snapshot: dict, diagnostics: dict) -> list[dict[str, s
     open_exposure = diagnostics.get("open_exposure", 0.0)
     equity = snapshot.get("equity", 0.0)
     exposure_pct = (open_exposure / equity * 100) if equity else 0.0
+
+    readiness = snapshot.get("readiness", {})
+    if readiness.get("status") == "NOT_READY":
+        notes.append({
+            "label": "Not live-ready",
+            "message": readiness.get("message", "Keep the simulator in paper mode."),
+            "level": "bad",
+        })
 
     if closed_trades < 10:
         notes.append({
