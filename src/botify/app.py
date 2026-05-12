@@ -95,11 +95,14 @@ PAGE = """
       <p class="note" id="readinessSummary">Waiting for readiness checks...</p>
       <ul class="review-list" id="readinessChecks"><li>Collecting checks...</li></ul>
     </section>
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
     <section class="panel">
       <h2>Profit Stages</h2>
       <p class="note" id="profitStageSummary">Waiting for profit-stage checks...</p>
       <ul class="review-list" id="profitStageChecks"><li>Collecting profit stages...</li></ul>
     </section>
+=======
+>>>>>>> main
     <section>
       <h2>Trade Diagnostics</h2>
       <div class="cards" id="diagnostics"></div>
@@ -197,7 +200,10 @@ function renderDashboard(data) {
 
   renderSafetyGuardrails(data);
   renderReadiness(data.readiness);
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
   renderProfitStage(data.profit_stage);
+=======
+>>>>>>> main
   renderDiagnostics(data.diagnostics);
   renderReviewNotes(data.review_notes);
 
@@ -240,7 +246,10 @@ function renderDashboard(data) {
 function renderSafetyGuardrails(data) {
   const plan = data.grid_plan || {};
   const diagnostics = data.diagnostics || {};
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
   const exchange = data.exchange || {};
+=======
+>>>>>>> main
   const capClass = diagnostics.committed_notional_pct > 20 ? 'warn' : 'good';
   const cards = [
     [
@@ -263,8 +272,11 @@ function renderSafetyGuardrails(data) {
     ['Grid Spacing', `${num(plan.spacing_pct || 0, 3)}%`, ''],
     ['Stale Cancel', `${num(data.config.stale_order_grid_steps)} grid steps`, ''],
     ['Max Total Notional', `${num(data.config.max_total_notional_pct * 100)}% equity`, ''],
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
     ['Exchange Adapter', exchange.mode || 'unknown', exchange.can_place_orders ? 'good' : 'warn'],
     ['Mark Price', exchange.mark_price ? money(exchange.mark_price) : 'n/a', ''],
+=======
+>>>>>>> main
   ];
   document.getElementById('safetyGuardrails').innerHTML = cards
     .map(([label, value, klass]) =>
@@ -281,6 +293,7 @@ function renderReadiness(readiness) {
     return `<li><strong class="${check.level}">${icon} ${check.label}</strong> — ${check.message}</li>`;
   }).join('');
 }
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
 function renderProfitStage(profitStage) {
   if (!profitStage) return;
   document.getElementById('profitStageSummary').textContent = profitStage.summary;
@@ -289,6 +302,8 @@ function renderProfitStage(profitStage) {
     return `<li><strong class="${stage.level}">${icon} ${stage.label}</strong> — ${stage.message}</li>`;
   }).join('');
 }
+=======
+>>>>>>> main
 function renderDiagnostics(diagnostics) {
   if (!diagnostics) return;
   document.getElementById('diagnostics').innerHTML = [
@@ -627,7 +642,10 @@ def _snapshot_unlocked() -> dict:
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
     snapshot["readiness"] = _readiness_payload(snapshot, snapshot["diagnostics"])
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
     snapshot["profit_stage"] = _profit_stage_payload(snapshot, snapshot["diagnostics"])
+=======
+>>>>>>> main
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
     return snapshot
 
@@ -685,6 +703,7 @@ def _diagnostics_payload(snapshot: dict) -> dict:
     }
 
 
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
 def _profit_stage_payload(snapshot: dict, diagnostics: dict) -> dict:
     config = snapshot.get("config", {})
     positions = snapshot.get("positions", [])
@@ -767,6 +786,8 @@ def _profit_backtest_message(last_report: dict | None) -> str:
         f"PF {last_report.get('profit_factor') or 'n/a'}."
     )
 
+=======
+>>>>>>> main
 def _readiness_payload(snapshot: dict, diagnostics: dict) -> dict:
     config = snapshot.get("config", {})
     grid_plan = snapshot.get("grid_plan", {})

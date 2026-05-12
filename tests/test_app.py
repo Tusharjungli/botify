@@ -136,6 +136,7 @@ def test_readiness_blocks_live_when_sample_and_pnl_are_not_ready():
     assert labels["Exposure cap"]["passed"] is True
     assert any(note["label"] == "Not live-ready" for note in snapshot["review_notes"])
     assert "Live Readiness" in app.PAGE
+<<<<<<< codex/review-futures-grid-bot-files-zssg9o
 
 
 def test_profit_stage_explains_when_realized_profit_can_appear():
@@ -175,3 +176,5 @@ def test_snapshot_exposes_exchange_adapter_status():
     assert snapshot["exchange"]["filters"]["symbol"] == "BTCUSDT"
     assert snapshot["exchange"]["mark_price"] == snapshot["price"]
     assert "Exchange Adapter" in app.PAGE
+=======
+>>>>>>> main
