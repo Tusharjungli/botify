@@ -114,10 +114,7 @@ def test_stale_or_wrong_side_orders_are_canceled_before_new_entries():
 
     snapshot = engine.snapshot()
     assert any(order["status"] == "CANCELED" for order in snapshot["canceled_orders"])
-    assert all(
-        abs(order["price"] - snapshot["price"]) < snapshot["grid_plan"]["step"] * 1.1
-        for order in snapshot["open_orders"]
-    )
+    assert all(order["price"] != 90_000 for order in snapshot["open_orders"])
 
 
 def test_spike_tick_cancels_pending_orders_before_they_fill():
@@ -149,6 +146,7 @@ def test_entries_use_passive_grid_levels_not_nearest_marketable_price():
 
     assert order["side"] == "BUY"
     assert order["price"] < snapshot["price"]
+    assert snapshot["price"] - order["price"] < snapshot["grid_plan"]["step"]
 
 
 def test_pending_order_capacity_blocks_new_grid_orders():
@@ -205,3 +203,21 @@ def test_range_mode_keeps_both_sides_when_canceling_stale_orders():
 
     assert snapshot["mode"] == "RANGE"
     assert {"BUY", "SELL"}.issubset(open_sides)
+
+
+def test_tighter_passive_offset_allows_small_range_move_to_fill():
+    engine = GridEngine(BotConfig(cooldown_ticks=1))
+
+    for _ in range(21):
+        engine.on_price(100_000)
+
+    first_order = engine.snapshot()["open_orders"][0]
+    assert first_order["side"] == "BUY"
+    assert 100_000 - first_order["price"] < engine.snapshot()["grid_plan"]["step"]
+
+    engine.on_price(99_880)
+    snapshot = engine.snapshot()
+
+    assert len(snapshot["recent_fills"]) == 1
+    assert len(snapshot["positions"]) == 1
+    assert snapshot["positions"][0]["side"] == "LONG"

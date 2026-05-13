@@ -24,6 +24,7 @@ class BotConfig:
     max_pending_orders: int = 12
     max_pending_orders_per_side: int = 6
     max_total_notional_pct: float = 0.30
+    passive_entry_offset_steps: float = 0.35
     stale_order_grid_steps: float = 6.5
     max_daily_loss_pct: float = 0.025
     daily_profit_lock_pct: float = 0.035
@@ -59,6 +60,8 @@ class BotConfig:
             raise ValueError("max_pending_orders_per_side cannot exceed max_pending_orders.")
         if not 0 < self.max_total_notional_pct <= 1:
             raise ValueError("max_total_notional_pct must be > 0 and <= 100%.")
+        if not 0 < self.passive_entry_offset_steps <= 2:
+            raise ValueError("passive_entry_offset_steps must be > 0 and <= 2 grid steps.")
         if self.stale_order_grid_steps <= 0:
             raise ValueError("stale_order_grid_steps must be positive.")
         if not 0 < self.max_tick_jump_pct <= 0.20:
