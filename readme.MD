@@ -10,7 +10,7 @@ Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a
 - ✅ Public Binance BTC price feed with deterministic offline fallback.
 - ✅ Simulated balance, realized PnL, unrealized PnL, win rate, paper orders, fills, open positions, and recent trades.
 - ✅ Moderate-risk defaults: low per-order risk, separate open-position and pending-order capacity, balanced long/short range ladders, tighter passive grid entries, total committed-notional cap, spike-tick order cancel/cooldown, stale pending-order cleanup, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
-- ✅ Beginner-friendly BTC backtest command.
+- ✅ Beginner-friendly BTC backtest command and headless paper-session collector.
 - ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, live-readiness checks, profit-stage guidance, and BTC price chart.
 - ✅ Local Binance Futures-style emulator with symbol filters, mark price status, liquidation estimates, and a read-only testnet adapter skeleton.
 - ❌ No private Binance API keys yet.
@@ -82,7 +82,7 @@ The localhost dashboard includes beginner-friendly controls:
 - **Profit Stages** — explain when unrealized PnL can become realized profit: entry fill, first exit, 30+ trade sample, positive paper edge, and confirming backtest.
 - **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, whether the run is not live-ready, and how much simulated exposure is open.
 - **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions. In range mode, pending orders are built as a balanced ladder below and above the current BTC price rather than repeatedly stacking one side; the first entry is intentionally closer than one full grid step so quiet one-hour sessions can still get realistic paper fills.
-- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
+- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs. For safer overnight collection, use the headless paper-session command below so data is written to disk even if the browser is closed.
 - **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, spike guard, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
 
@@ -110,6 +110,21 @@ PYTHONPATH=src python -m botify.backtest --source binance --interval 15m --limit
 
 The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries.
 
+
+## Collect paper-trading data without keeping the browser open
+
+For serious tuning, do **not** judge the bot from a 1-2 hour dashboard run. Use the headless paper-session collector so Botify writes `report.json`, `latest_snapshot.json`, and `trades.csv` under `data/paper_sessions/` while it runs. The dashboard can be closed; only the terminal process needs to stay alive.
+
+```bash
+# Fast local smoke run with deterministic prices
+PYTHONPATH=src python -m botify.paper_session --source synthetic --ticks 500 --target-closed-trades 5
+
+# Paper collect from Binance public ticker, saving every 20 ticks
+PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 10000 --target-closed-trades 30 --save-every 20
+```
+
+Do not connect live Binance keys just because one short run is green. The current live-readiness gate expects at least 30 closed simulated trades, positive equity, positive expectancy/profit factor, exposure within caps, no risk locks, and a passing backtest before moving to Binance Futures **testnet**. Live funds should come only after testnet order placement and reconciliation are proven stable.
+
 ## API endpoints
 
 - `GET /` — dashboard.
@@ -128,12 +143,13 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 1. **Local BTC simulator and dashboard** — done.
 2. **BTC backtesting command** — done.
 3. **Dashboard controls: pause/resume, reset, cancel orders, emergency stop, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
-4. Use the live-readiness panel as the gate for moving from local simulation to Binance Futures testnet; do not connect live keys while any gate is failing.
-5. Expand Binance-style local controls with richer order reconciliation, funding-rate modeling, partial fills, slippage, spike/outlier reports, and exchange filters.
-6. Add signed read-only Binance Futures testnet calls for exchange info, account info, positions, mark price, and user-stream reconciliation.
-7. Add testnet-only order placement behind manual confirmation and kill-switch checks.
-8. Add production safety gates: manual confirmation, exchange-side max leverage checks, kill switch, error alerts, and audit logs.
-9. Only after BTC is stable, consider adding other symbols.
+4. **Headless paper-session collector with durable JSON/CSV outputs** — done.
+5. Use the live-readiness panel as the gate for moving from local simulation to Binance Futures testnet; do not connect live keys while any gate is failing.
+6. Expand Binance-style local controls with richer order reconciliation, funding-rate modeling, partial fills, slippage, spike/outlier reports, and exchange filters.
+7. Add signed read-only Binance Futures testnet calls for exchange info, account info, positions, mark price, and user-stream reconciliation.
+8. Add testnet-only order placement behind manual confirmation and kill-switch checks.
+9. Add production safety gates: manual confirmation, exchange-side max leverage checks, kill switch, error alerts, and audit logs.
+10. Only after BTC is stable, consider adding other symbols.
 
 ## Tests
 
