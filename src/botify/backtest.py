@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import time
 from dataclasses import dataclass
 from typing import Iterable
 from urllib.error import HTTPError, URLError
@@ -79,12 +80,56 @@ class BacktestReport:
 
 
 def fetch_binance_closes(symbol: str = "BTCUSDT", interval: str = "5m", limit: int = 1000) -> list[float]:
-    """Fetch public Binance candle closes without API keys."""
+    """Fetch public Binance candle closes without API keys.
 
-    query = urlencode({"symbol": symbol, "interval": interval, "limit": limit})
-    with urlopen(f"{BINANCE_KLINES_ENDPOINT}?{query}", timeout=8) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    return [float(candle[4]) for candle in payload]
+    Binance returns at most 1000 klines per request, so larger limits are
+    collected by paging forward from the oldest available chunk. This lets the
+    optimizer request longer samples like 2000-5000 candles when one 1000-candle
+    window does not produce enough closed paper trades.
+    """
+
+    if limit < 1:
+        raise ValueError("limit must be at least 1")
+
+    closes: list[float] = []
+    interval_ms = interval_to_milliseconds(interval)
+    start_time = int(time.time() * 1000) - (limit * interval_ms)
+    while len(closes) < limit:
+        chunk_limit = min(1000, limit - len(closes))
+        query_args: dict[str, int | str] = {
+            "symbol": symbol,
+            "interval": interval,
+            "limit": chunk_limit,
+            "startTime": start_time,
+        }
+        query = urlencode(query_args)
+        with urlopen(f"{BINANCE_KLINES_ENDPOINT}?{query}", timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not payload:
+            break
+        closes.extend(float(candle[4]) for candle in payload)
+        if len(payload) < chunk_limit:
+            break
+        start_time = int(payload[-1][0]) + interval_ms
+    return closes[:limit]
+
+
+def interval_to_milliseconds(interval: str) -> int:
+    """Convert a Binance interval string to milliseconds for pagination."""
+
+    if len(interval) < 2:
+        raise ValueError("interval must include a number and unit, for example 5m")
+    amount = int(interval[:-1])
+    unit = interval[-1]
+    multipliers = {
+        "m": 60_000,
+        "h": 60 * 60_000,
+        "d": 24 * 60 * 60_000,
+        "w": 7 * 24 * 60 * 60_000,
+    }
+    if unit not in multipliers:
+        raise ValueError("unsupported Binance interval unit; use m, h, d, or w")
+    return amount * multipliers[unit]
 
 
 def synthetic_closes(limit: int = 1000, start_price: float = 80_000.0) -> list[float]:

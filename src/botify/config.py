@@ -21,6 +21,11 @@ class BotConfig:
     leverage: float = 2.0
     base_order_risk_pct: float = 0.0125
     max_open_positions: int = 6
+    max_pending_orders: int = 12
+    max_pending_orders_per_side: int = 6
+    max_total_notional_pct: float = 0.30
+    passive_entry_offset_steps: float = 0.35
+    stale_order_grid_steps: float = 6.5
     max_daily_loss_pct: float = 0.025
     daily_profit_lock_pct: float = 0.035
     stop_loss_pct: float = 0.012
@@ -29,7 +34,10 @@ class BotConfig:
     taker_fee_pct: float = 0.0005
     trailing_stop_pct: float = 0.004
     min_grid_profit_pct: float = 0.0015
+    trend_flip_min_loss_pct: float = 0.0
     cooldown_ticks: int = 2
+    max_tick_jump_pct: float = 0.03
+    spike_cooldown_ticks: int = 10
     ema_fast: int = 9
     ema_slow: int = 21
     trend_strength_threshold: float = 0.00035
@@ -45,5 +53,23 @@ class BotConfig:
             raise ValueError("base_order_risk_pct must be > 0 and <= 5%.")
         if self.max_open_positions < 1:
             raise ValueError("max_open_positions must be at least 1.")
+        if self.max_pending_orders < 1:
+            raise ValueError("max_pending_orders must be at least 1.")
+        if self.max_pending_orders_per_side < 1:
+            raise ValueError("max_pending_orders_per_side must be at least 1.")
+        if self.max_pending_orders_per_side > self.max_pending_orders:
+            raise ValueError("max_pending_orders_per_side cannot exceed max_pending_orders.")
+        if not 0 < self.max_total_notional_pct <= 1:
+            raise ValueError("max_total_notional_pct must be > 0 and <= 100%.")
+        if not 0 < self.passive_entry_offset_steps <= 2:
+            raise ValueError("passive_entry_offset_steps must be > 0 and <= 2 grid steps.")
+        if self.stale_order_grid_steps <= 0:
+            raise ValueError("stale_order_grid_steps must be positive.")
+        if not 0 <= self.trend_flip_min_loss_pct <= self.stop_loss_pct:
+            raise ValueError("trend_flip_min_loss_pct must be between 0 and stop_loss_pct.")
+        if not 0 < self.max_tick_jump_pct <= 0.20:
+            raise ValueError("max_tick_jump_pct must be > 0 and <= 20%.")
+        if self.spike_cooldown_ticks < 1:
+            raise ValueError("spike_cooldown_ticks must be at least 1.")
         if self.leverage < 1 or self.leverage > 5:
             raise ValueError("For moderate risk, leverage must stay between 1x and 5x.")
