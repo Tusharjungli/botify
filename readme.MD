@@ -125,6 +125,18 @@ PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --
 
 Do not connect live Binance keys just because one short run is green. The current live-readiness gate expects at least 30 closed simulated trades, positive equity, positive expectancy/profit factor, exposure within caps, no risk locks, and a passing backtest before moving to Binance Futures **testnet**. Live funds should come only after testnet order placement and reconciliation are proven stable.
 
+
+## Tune parameters before testnet
+
+A short paper run can look promising while the backtest gate still fails. Before Binance testnet, run the parameter sweep and compare safer settings across the same historical/synthetic price series.
+
+```bash
+PYTHONPATH=src python -m botify.optimize --source synthetic --limit 500 --top 10
+PYTHONPATH=src python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
+```
+
+The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet.
+
 ## API endpoints
 
 - `GET /` — dashboard.
@@ -144,12 +156,13 @@ Do not connect live Binance keys just because one short run is green. The curren
 2. **BTC backtesting command** — done.
 3. **Dashboard controls: pause/resume, reset, cancel orders, emergency stop, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
 4. **Headless paper-session collector with durable JSON/CSV outputs** — done.
-5. Use the live-readiness panel as the gate for moving from local simulation to Binance Futures testnet; do not connect live keys while any gate is failing.
-6. Expand Binance-style local controls with richer order reconciliation, funding-rate modeling, partial fills, slippage, spike/outlier reports, and exchange filters.
-7. Add signed read-only Binance Futures testnet calls for exchange info, account info, positions, mark price, and user-stream reconciliation.
-8. Add testnet-only order placement behind manual confirmation and kill-switch checks.
-9. Add production safety gates: manual confirmation, exchange-side max leverage checks, kill switch, error alerts, and audit logs.
-10. Only after BTC is stable, consider adding other symbols.
+5. **Parameter sweep for safer backtest-first tuning** — done.
+6. Use the live-readiness panel as the gate for moving from local simulation to Binance Futures testnet; do not connect live keys while any gate is failing.
+7. Expand Binance-style local controls with richer order reconciliation, funding-rate modeling, partial fills, slippage, spike/outlier reports, and exchange filters.
+8. Add signed read-only Binance Futures testnet calls for exchange info, account info, positions, mark price, and user-stream reconciliation.
+9. Add testnet-only order placement behind manual confirmation and kill-switch checks.
+10. Add production safety gates: manual confirmation, exchange-side max leverage checks, kill switch, error alerts, and audit logs.
+11. Only after BTC is stable, consider adding other symbols.
 
 ## Tests
 
