@@ -30,6 +30,7 @@ class SweepResult:
     min_grid_profit_pct: float
     trailing_stop_pct: float
     stop_loss_pct: float
+    trend_flip_min_loss_pct: float
     closed_trades: int
     total_return_pct: float
     ending_equity: float
@@ -78,7 +79,7 @@ class SweepReport:
         for result in self.results[:limit]:
             rows.append(
                 "#{} score={:.2f} return={:.2f}% PF={} trades={} DD={:.2f}% "
-                "range={:.2f}% offset={:.2f} min_profit={:.2f}% trail={:.2f}% stop={:.2f}% {}".format(
+                "range={:.2f}% offset={:.2f} min_profit={:.2f}% trail={:.2f}% stop={:.2f}% trend_flip={:.2f}% {}".format(
                     result.rank,
                     result.score,
                     result.total_return_pct,
@@ -90,6 +91,7 @@ class SweepReport:
                     result.min_grid_profit_pct * 100,
                     result.trailing_stop_pct * 100,
                     result.stop_loss_pct * 100,
+                    result.trend_flip_min_loss_pct * 100,
                     result.recommendation,
                 )
             )
@@ -150,19 +152,24 @@ def _config_variants(base: BotConfig) -> Iterable[BotConfig]:
     min_profit_pcts = (0.0015, 0.0025)
     trailing_pcts = (0.004, 0.006)
     stop_loss_pcts = (0.01, 0.012, 0.016)
+    trend_flip_min_loss_pcts = (0.0, 0.0015, 0.003, 0.006)
     for range_pct in range_pcts:
         for entry_offset in entry_offsets:
             for min_profit_pct in min_profit_pcts:
                 for trailing_pct in trailing_pcts:
                     for stop_loss_pct in stop_loss_pcts:
-                        yield replace(
-                            base,
-                            range_pct=range_pct,
-                            passive_entry_offset_steps=entry_offset,
-                            min_grid_profit_pct=min_profit_pct,
-                            trailing_stop_pct=trailing_pct,
-                            stop_loss_pct=stop_loss_pct,
-                        )
+                        for trend_flip_min_loss_pct in trend_flip_min_loss_pcts:
+                            if trend_flip_min_loss_pct > stop_loss_pct:
+                                continue
+                            yield replace(
+                                base,
+                                range_pct=range_pct,
+                                passive_entry_offset_steps=entry_offset,
+                                min_grid_profit_pct=min_profit_pct,
+                                trailing_stop_pct=trailing_pct,
+                                stop_loss_pct=stop_loss_pct,
+                                trend_flip_min_loss_pct=trend_flip_min_loss_pct,
+                            )
 
 
 def _score(report: BacktestReport) -> float:
@@ -187,6 +194,7 @@ def _result_from_report(*, report: BacktestReport, config: BotConfig, score: flo
         min_grid_profit_pct=config.min_grid_profit_pct,
         trailing_stop_pct=config.trailing_stop_pct,
         stop_loss_pct=config.stop_loss_pct,
+        trend_flip_min_loss_pct=config.trend_flip_min_loss_pct,
         closed_trades=report.closed_trades,
         total_return_pct=report.total_return_pct,
         ending_equity=report.ending_equity,

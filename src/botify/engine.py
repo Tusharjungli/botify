@@ -446,7 +446,8 @@ class GridEngine:
                 return "stop_loss"
             if price <= position.peak_price * (1 - self.config.trailing_stop_pct) and price > position.entry_price:
                 return "trailing_profit"
-            if self.state.mode == "DOWNTREND" and price < position.entry_price:
+            adverse_pct = (position.entry_price - price) / position.entry_price
+            if self.state.mode == "DOWNTREND" and adverse_pct >= self.config.trend_flip_min_loss_pct:
                 return "trend_flip"
         else:
             if price <= position.target_price and profit_pct >= self.config.min_grid_profit_pct:
@@ -455,7 +456,8 @@ class GridEngine:
                 return "stop_loss"
             if price >= position.trough_price * (1 + self.config.trailing_stop_pct) and price < position.entry_price:
                 return "trailing_profit"
-            if self.state.mode == "UPTREND" and price > position.entry_price:
+            adverse_pct = (price - position.entry_price) / position.entry_price
+            if self.state.mode == "UPTREND" and adverse_pct >= self.config.trend_flip_min_loss_pct:
                 return "trend_flip"
         return None
 

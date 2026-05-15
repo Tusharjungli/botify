@@ -182,7 +182,7 @@ python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
 python -m botify.optimize --source binance --interval 5m --limit 3000 --top 10
 ```
 
-The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet. If the report says `Candidates: 0` or every row says `NEEDS_MORE_TRADES`, keep sweeping longer samples and do not connect Binance testnet/live yet.
+The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet. If the report says `Candidates: 0` or every row says `NEEDS_MORE_TRADES`, keep sweeping longer samples and do not connect Binance testnet/live yet. The sweep also tests `trend_flip_min_loss_pct`, which delays trend-flip exits until a position has moved far enough against entry; this is useful when backtests show many small trend-flip losses.
 
 ## API endpoints
 

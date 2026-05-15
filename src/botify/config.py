@@ -34,6 +34,7 @@ class BotConfig:
     taker_fee_pct: float = 0.0005
     trailing_stop_pct: float = 0.004
     min_grid_profit_pct: float = 0.0015
+    trend_flip_min_loss_pct: float = 0.0
     cooldown_ticks: int = 2
     max_tick_jump_pct: float = 0.03
     spike_cooldown_ticks: int = 10
@@ -64,6 +65,8 @@ class BotConfig:
             raise ValueError("passive_entry_offset_steps must be > 0 and <= 2 grid steps.")
         if self.stale_order_grid_steps <= 0:
             raise ValueError("stale_order_grid_steps must be positive.")
+        if not 0 <= self.trend_flip_min_loss_pct <= self.stop_loss_pct:
+            raise ValueError("trend_flip_min_loss_pct must be between 0 and stop_loss_pct.")
         if not 0 < self.max_tick_jump_pct <= 0.20:
             raise ValueError("max_tick_jump_pct must be > 0 and <= 20%.")
         if self.spike_cooldown_ticks < 1:

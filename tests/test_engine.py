@@ -221,3 +221,38 @@ def test_tighter_passive_offset_allows_small_range_move_to_fill():
     assert len(snapshot["recent_fills"]) == 1
     assert len(snapshot["positions"]) == 1
     assert snapshot["positions"][0]["side"] == "LONG"
+
+
+def test_trend_flip_exit_waits_for_configured_adverse_move():
+    config = BotConfig(cooldown_ticks=1, trend_flip_min_loss_pct=0.003)
+    engine = GridEngine(config)
+    for _ in range(config.ema_slow):
+        engine.on_price(100_000)
+    position = _position(side="LONG", entry_price=100_000)
+    engine.state.positions.append(position)
+    engine.state.mode = "DOWNTREND"
+
+    engine._close_positions(99_850)
+    assert len(engine.state.positions) == 1
+    assert engine.state.trades == []
+
+    engine._close_positions(99_650)
+    assert engine.state.positions == []
+    assert engine.state.trades[-1].reason == "trend_flip"
+
+
+def _position(side: str = "LONG", entry_price: float = 100_000):
+    from botify.engine import Position
+
+    return Position(
+        side=side,
+        entry_price=entry_price,
+        notional=250,
+        quantity=0.0025,
+        opened_at="2026-01-01T00:00:00+00:00",
+        target_price=101_000 if side == "LONG" else 99_000,
+        stop_price=98_800 if side == "LONG" else 101_200,
+        peak_price=entry_price,
+        trough_price=entry_price,
+        grid_index=12,
+    )

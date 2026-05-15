@@ -237,6 +237,7 @@ function renderDashboard(data) {
     ['Stop Loss', `${num(data.config.stop_loss_pct * 100)}%`],
     ['Trailing Stop', `${num(data.config.trailing_stop_pct * 100)}%`],
     ['Min Grid Profit', `${num(data.config.min_grid_profit_pct * 100)}%`],
+    ['Trend Flip Min Loss', `${num(data.config.trend_flip_min_loss_pct * 100)}%`],
   ].map(([label, value]) => `<article class="card"><div class="label">${label}</div><div class="small-value">${value}</div></article>`).join('');
 
   document.getElementById('orders').innerHTML = data.open_orders.length ? data.open_orders.map(o => `
