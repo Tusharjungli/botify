@@ -168,6 +168,8 @@ Mac/Linux/Git Bash:
 ```bash
 PYTHONPATH=src python -m botify.optimize --source synthetic --limit 500 --top 10
 PYTHONPATH=src python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
+# If every result says NEEDS_MORE_TRADES, run a longer paginated Binance sweep:
+python -m botify.optimize --source binance --interval 5m --limit 3000 --top 10
 ```
 
 Windows PowerShell:
@@ -176,9 +178,11 @@ Windows PowerShell:
 $env:PYTHONPATH="src"
 python -m botify.optimize --source synthetic --limit 500 --top 10
 python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
+# If every result says NEEDS_MORE_TRADES, run a longer paginated Binance sweep:
+python -m botify.optimize --source binance --interval 5m --limit 3000 --top 10
 ```
 
-The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet.
+The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet. If the report says `Candidates: 0` or every row says `NEEDS_MORE_TRADES`, keep sweeping longer samples and do not connect Binance testnet/live yet.
 
 ## API endpoints
 

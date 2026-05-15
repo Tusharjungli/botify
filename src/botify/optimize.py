@@ -59,6 +59,10 @@ class SweepReport:
     variants_tested: int
     results: list[SweepResult]
 
+    @property
+    def candidate_count(self) -> int:
+        return sum(1 for result in self.results if result.recommendation == "CANDIDATE_FOR_PAPER_TEST")
+
     def lines(self, limit: int = 10) -> list[str]:
         rows = [
             "Botify Parameter Sweep Report",
@@ -67,6 +71,7 @@ class SweepReport:
             f"Interval:        {self.interval}",
             f"Candles:         {self.candles}",
             f"Variants tested: {self.variants_tested}",
+            f"Candidates:      {self.candidate_count}",
             "",
             "Top variants:",
         ]
@@ -88,6 +93,12 @@ class SweepReport:
                     result.recommendation,
                 )
             )
+        if self.candidate_count == 0:
+            rows.extend([
+                "",
+                "No candidate passed the gates. Do not move to testnet/live yet.",
+                "Next: run a longer Binance sweep, for example --limit 3000, then paper-test only a variant that shows positive equity and PF >= 1.05.",
+            ])
         return rows
 
     def to_dict(self) -> dict:
@@ -96,6 +107,7 @@ class SweepReport:
             "interval": self.interval,
             "candles": self.candles,
             "variants_tested": self.variants_tested,
+            "candidate_count": self.candidate_count,
             "results": [result.to_dict() for result in self.results],
         }
 
@@ -212,7 +224,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a Botify parameter sweep before testnet/live decisions.")
     parser.add_argument("--symbol", default="BTCUSDT", help="Trading pair. Botify currently supports BTCUSDT.")
     parser.add_argument("--interval", default="5m", help="Binance candle interval, for example 1m, 5m, 15m, 1h.")
-    parser.add_argument("--limit", type=int, default=1000, help="Number of closes to test.")
+    parser.add_argument("--limit", type=int, default=1000, help="Number of closes to test. Binance requests above 1000 are paginated.")
     parser.add_argument(
         "--source",
         choices=("auto", "binance", "synthetic"),
