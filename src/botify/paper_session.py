@@ -12,7 +12,7 @@ import csv
 import json
 import math
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
@@ -150,6 +150,25 @@ def run_paper_session(
     _write_trades_csv(session_dir, engine.state.trades)
     _write_report(session_dir, report)
     return report
+
+
+def build_config_from_args(args: argparse.Namespace) -> BotConfig:
+    """Build BotConfig with optional strategy overrides from the CLI."""
+
+    config = BotConfig()
+    overrides = {
+        "range_pct": args.range_pct,
+        "passive_entry_offset_steps": args.entry_offset,
+        "min_grid_profit_pct": args.min_grid_profit_pct,
+        "trailing_stop_pct": args.trailing_stop_pct,
+        "stop_loss_pct": args.stop_loss_pct,
+        "trend_flip_min_loss_pct": args.trend_flip_min_loss_pct,
+    }
+    applied = {name: value for name, value in overrides.items() if value is not None}
+    if applied:
+        config = replace(config, **applied)
+    config.validate()
+    return config
 
 
 def _build_feed(*, source: str, symbol: str) -> PriceFeed:
@@ -303,6 +322,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sleep-seconds", type=float, default=0.0, help="Delay between ticks. Use 3 for dashboard-like polling.")
     parser.add_argument("--save-every", type=int, default=50, help="Persist snapshot/trades every N ticks.")
     parser.add_argument("--output-dir", default="data/paper_sessions", help="Directory for session folders.")
+    parser.add_argument("--range-pct", type=float, default=None, help="Override grid range as a decimal, e.g. 0.035 for 3.5%%.")
+    parser.add_argument("--entry-offset", type=float, default=None, help="Override passive_entry_offset_steps from optimizer output.")
+    parser.add_argument("--min-grid-profit-pct", type=float, default=None, help="Override min grid profit as a decimal, e.g. 0.0015 for 0.15%%.")
+    parser.add_argument("--trailing-stop-pct", type=float, default=None, help="Override trailing stop as a decimal, e.g. 0.004 for 0.4%%.")
+    parser.add_argument("--stop-loss-pct", type=float, default=None, help="Override stop loss as a decimal, e.g. 0.01 for 1%%.")
+    parser.add_argument("--trend-flip-min-loss-pct", type=float, default=None, help="Override trend flip min loss as a decimal, e.g. 0.006 for 0.6%%.")
     return parser.parse_args()
 
 
@@ -315,6 +340,7 @@ def main() -> None:
         sleep_seconds=args.sleep_seconds,
         save_every=args.save_every,
         output_dir=args.output_dir,
+        config=build_config_from_args(args),
     )
     print("\n".join(report.lines()))
 
