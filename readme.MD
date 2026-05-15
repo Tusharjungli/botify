@@ -67,6 +67,13 @@ You can also run the compatibility launcher:
 PYTHONPATH=. python bot.py
 ```
 
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="."
+python bot.py
+```
+
 
 ## Dashboard controls
 
@@ -90,15 +97,24 @@ These controls are still simulation-only. They do not connect private Binance AP
 
 ## Run a BTC backtest
 
-After the dashboard works, run a historical/synthetic BTC backtest from the terminal:
+After the dashboard works, run a historical/synthetic BTC backtest from the terminal.
+
+Mac/Linux/Git Bash:
 
 ```bash
 PYTHONPATH=src python -m botify.backtest
 ```
 
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m botify.backtest
+```
+
 By default, Botify tries public Binance `BTCUSDT` 5-minute candles and automatically falls back to deterministic synthetic prices if Binance is unavailable.
 
-Useful examples:
+Useful examples for Mac/Linux/Git Bash:
 
 ```bash
 # Force synthetic data so the command works offline
@@ -108,12 +124,21 @@ PYTHONPATH=src python -m botify.backtest --source synthetic --limit 500
 PYTHONPATH=src python -m botify.backtest --source binance --interval 15m --limit 1000
 ```
 
+Useful examples for Windows PowerShell after setting `$env:PYTHONPATH="src"`:
+
+```powershell
+python -m botify.backtest --source synthetic --limit 500
+python -m botify.backtest --source binance --interval 15m --limit 1000
+```
+
 The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries.
 
 
 ## Collect paper-trading data without keeping the browser open
 
 For serious tuning, do **not** judge the bot from a 1-2 hour dashboard run. Use the headless paper-session collector so Botify writes `report.json`, `latest_snapshot.json`, and `trades.csv` under `data/paper_sessions/` while it runs. The dashboard can be closed; only the terminal process needs to stay alive.
+
+Mac/Linux/Git Bash:
 
 ```bash
 # Fast local smoke run with deterministic prices
@@ -123,6 +148,14 @@ PYTHONPATH=src python -m botify.paper_session --source synthetic --ticks 500 --t
 PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 10000 --target-closed-trades 30 --save-every 20
 ```
 
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m botify.paper_session --source synthetic --ticks 500 --target-closed-trades 5
+python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 10000 --target-closed-trades 30 --save-every 20
+```
+
 Do not connect live Binance keys just because one short run is green. The current live-readiness gate expects at least 30 closed simulated trades, positive equity, positive expectancy/profit factor, exposure within caps, no risk locks, and a passing backtest before moving to Binance Futures **testnet**. Live funds should come only after testnet order placement and reconciliation are proven stable.
 
 
@@ -130,9 +163,19 @@ Do not connect live Binance keys just because one short run is green. The curren
 
 A short paper run can look promising while the backtest gate still fails. Before Binance testnet, run the parameter sweep and compare safer settings across the same historical/synthetic price series.
 
+Mac/Linux/Git Bash:
+
 ```bash
 PYTHONPATH=src python -m botify.optimize --source synthetic --limit 500 --top 10
 PYTHONPATH=src python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
+```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m botify.optimize --source synthetic --limit 500 --top 10
+python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
 ```
 
 The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet.
@@ -166,6 +209,15 @@ The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sw
 
 ## Tests
 
+Mac/Linux/Git Bash:
+
 ```bash
 PYTHONPATH=src pytest
+```
+
+Windows PowerShell:
+
+```powershell
+$env:PYTHONPATH="src"
+pytest
 ```
