@@ -1,6 +1,6 @@
 import math
 
-from botify.backtest import max_drawdown_pct, run_backtest, synthetic_closes
+from botify.backtest import interval_to_milliseconds, max_drawdown_pct, run_backtest, synthetic_closes
 from botify.config import BotConfig
 
 
@@ -29,3 +29,9 @@ def test_backtest_rejects_empty_prices():
 
 def test_max_drawdown_pct():
     assert max_drawdown_pct([100, 110, 99, 120]) == 10
+
+
+def test_interval_to_milliseconds_supports_common_binance_units():
+    assert interval_to_milliseconds("5m") == 300_000
+    assert interval_to_milliseconds("1h") == 3_600_000
+    assert interval_to_milliseconds("1d") == 86_400_000
