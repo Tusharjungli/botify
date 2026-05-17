@@ -2,3 +2,5 @@
 __pycache__/
 *.pyc
 venv/
+data/paper_sessions/
+data/optimization/
