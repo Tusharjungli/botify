@@ -182,24 +182,24 @@ python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
 python -m botify.optimize --source binance --interval 5m --limit 3000 --top 10
 ```
 
-The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet. If the report says `Candidates: 0` or every row says `NEEDS_MORE_TRADES`, keep sweeping longer samples and do not connect Binance testnet/live yet. The sweep also tests `trend_flip_min_loss_pct`, which delays trend-flip exits until a position has moved far enough against entry; this is useful when backtests show many small trend-flip losses.
+The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Results are now ordered by live-readiness gates first, then score, so actionable `CANDIDATE_FOR_PAPER_TEST` rows are promoted above high-profit-factor rows that still have too few trades. The report also prints a `Best paper-test candidates` section and a ready-to-copy `python -m botify.paper_session ...` command for the best candidate. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet. If the report says `Candidates: 0` or every row says `NEEDS_MORE_TRADES`, keep sweeping longer samples and do not connect Binance testnet/live yet. The sweep also tests `trend_flip_min_loss_pct`, which delays trend-flip exits until a position has moved far enough against entry; this is useful when backtests show many small trend-flip losses.
 
 
 ## Paper-test an optimizer candidate
 
-When the optimizer prints `CANDIDATE_FOR_PAPER_TEST`, run a headless paper session with those exact settings before any testnet order work. For the candidate shown above (`range=3.50%`, `offset=0.50`, `min_profit=0.15%`, `trail=0.40%`, `stop=1.00%`, `trend_flip=0.60%`), use decimals in the CLI:
+When the optimizer prints `CANDIDATE_FOR_PAPER_TEST`, run a headless paper session with those exact settings before any testnet order work. Prefer the command printed under `Next paper-session command`; it converts the best candidate's percentage values into the decimal CLI flags expected by `paper_session`. For a candidate like `range=3.50%`, `offset=0.35`, `min_profit=0.15%`, `trail=0.40%`, `stop=1.00%`, `trend_flip=0.60%`, use decimals in the CLI:
 
 Windows PowerShell:
 
 ```powershell
 $env:PYTHONPATH="src"
-python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.5 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
+python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
 ```
 
 Mac/Linux/Git Bash:
 
 ```bash
-PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.5 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
+PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
 ```
 
 The command now prints progress every `--progress-every` ticks and writes files every `--save-every` ticks, so a long run should not look frozen. If you need to stop it, press `Ctrl+C`; the latest saved files remain in `data/paper_sessions/`. Only consider Binance Futures testnet order placement if this follow-up paper run also stays positive with PF >= 1.05 and acceptable drawdown.

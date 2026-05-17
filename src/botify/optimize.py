@@ -18,6 +18,9 @@ from .backtest import BacktestReport, format_profit_factor, load_closes, run_bac
 from .config import BotConfig
 
 
+CANDIDATE_RECOMMENDATION = "CANDIDATE_FOR_PAPER_TEST"
+
+
 @dataclass(frozen=True)
 class SweepResult:
     """One configuration variant and its backtest result."""
@@ -61,8 +64,16 @@ class SweepReport:
     results: list[SweepResult]
 
     @property
+    def candidate_results(self) -> list[SweepResult]:
+        return [result for result in self.results if result.recommendation == CANDIDATE_RECOMMENDATION]
+
+    @property
     def candidate_count(self) -> int:
-        return sum(1 for result in self.results if result.recommendation == "CANDIDATE_FOR_PAPER_TEST")
+        return len(self.candidate_results)
+
+    @property
+    def best_candidate(self) -> SweepResult | None:
+        return self.candidate_results[0] if self.candidate_results else None
 
     def lines(self, limit: int = 10) -> list[str]:
         rows = [
@@ -77,31 +88,42 @@ class SweepReport:
             "Top variants:",
         ]
         for result in self.results[:limit]:
-            rows.append(
-                "#{} score={:.2f} return={:.2f}% PF={} trades={} DD={:.2f}% "
-                "range={:.2f}% offset={:.2f} min_profit={:.2f}% trail={:.2f}% stop={:.2f}% trend_flip={:.2f}% {}".format(
-                    result.rank,
-                    result.score,
-                    result.total_return_pct,
-                    format_profit_factor(result.profit_factor),
-                    result.closed_trades,
-                    result.max_drawdown_pct,
-                    result.range_pct * 100,
-                    result.passive_entry_offset_steps,
-                    result.min_grid_profit_pct * 100,
-                    result.trailing_stop_pct * 100,
-                    result.stop_loss_pct * 100,
-                    result.trend_flip_min_loss_pct * 100,
-                    result.recommendation,
-                )
-            )
-        if self.candidate_count == 0:
+            rows.append(_format_result(result))
+        if self.candidate_count:
+            rows.extend([
+                "",
+                "Best paper-test candidates:",
+            ])
+            for result in self.candidate_results[:limit]:
+                rows.append(_format_result(result))
+            rows.extend([
+                "",
+                "Next paper-session command:",
+                self.paper_session_command(),
+                "Only move to Binance Futures testnet if the paper session also stays positive with enough closed trades and acceptable drawdown.",
+            ])
+        else:
             rows.extend([
                 "",
                 "No candidate passed the gates. Do not move to testnet/live yet.",
                 "Next: run a longer Binance sweep, for example --limit 3000, then paper-test only a variant that shows positive equity and PF >= 1.05.",
             ])
         return rows
+
+    def paper_session_command(self) -> str:
+        candidate = self.best_candidate
+        if not candidate:
+            return "No paper-session command: no candidate passed the gates."
+        return (
+            "python -m botify.paper_session --source auto --sleep-seconds 3 "
+            "--ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 "
+            f"--range-pct {candidate.range_pct:g} "
+            f"--entry-offset {candidate.passive_entry_offset_steps:g} "
+            f"--min-grid-profit-pct {candidate.min_grid_profit_pct:g} "
+            f"--trailing-stop-pct {candidate.trailing_stop_pct:g} "
+            f"--stop-loss-pct {candidate.stop_loss_pct:g} "
+            f"--trend-flip-min-loss-pct {candidate.trend_flip_min_loss_pct:g}"
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -110,6 +132,8 @@ class SweepReport:
             "candles": self.candles,
             "variants_tested": self.variants_tested,
             "candidate_count": self.candidate_count,
+            "best_candidate": self.best_candidate.to_dict() if self.best_candidate else None,
+            "paper_session_command": self.paper_session_command() if self.best_candidate else None,
             "results": [result.to_dict() for result in self.results],
         }
 
@@ -135,8 +159,7 @@ def run_parameter_sweep(
         score = _score(report)
         results.append(_result_from_report(report=report, config=config, score=score, rank=0))
 
-    ranked = sorted(results, key=lambda result: result.score, reverse=True)
-    ranked = [replace(result, rank=index + 1) for index, result in enumerate(ranked)]
+    ranked = _rank_results(results)
     return SweepReport(
         source=source,
         interval=interval,
@@ -144,6 +167,51 @@ def run_parameter_sweep(
         variants_tested=len(variants),
         results=ranked,
     )
+
+
+def _format_result(result: SweepResult) -> str:
+    return (
+        "#{} score={:.2f} return={:.2f}% PF={} trades={} DD={:.2f}% "
+        "range={:.2f}% offset={:.2f} min_profit={:.2f}% trail={:.2f}% stop={:.2f}% trend_flip={:.2f}% {}"
+    ).format(
+        result.rank,
+        result.score,
+        result.total_return_pct,
+        format_profit_factor(result.profit_factor),
+        result.closed_trades,
+        result.max_drawdown_pct,
+        result.range_pct * 100,
+        result.passive_entry_offset_steps,
+        result.min_grid_profit_pct * 100,
+        result.trailing_stop_pct * 100,
+        result.stop_loss_pct * 100,
+        result.trend_flip_min_loss_pct * 100,
+        result.recommendation,
+    )
+
+
+def _rank_results(results: list[SweepResult]) -> list[SweepResult]:
+    ranked = sorted(
+        results,
+        key=lambda result: (
+            _recommendation_priority(result.recommendation),
+            result.score,
+            result.closed_trades,
+            result.total_return_pct,
+        ),
+        reverse=True,
+    )
+    return [replace(result, rank=index + 1) for index, result in enumerate(ranked)]
+
+
+def _recommendation_priority(recommendation: str) -> int:
+    if recommendation == CANDIDATE_RECOMMENDATION:
+        return 3
+    if recommendation == "NEEDS_MORE_TRADES":
+        return 2
+    if recommendation == "REJECT_WEAK_PROFIT_FACTOR":
+        return 1
+    return 0
 
 
 def _config_variants(base: BotConfig) -> Iterable[BotConfig]:
@@ -213,7 +281,7 @@ def _recommendation(report: BacktestReport) -> str:
         return "REJECT_EQUITY_BELOW_START"
     if report.profit_factor < 1.05:
         return "REJECT_WEAK_PROFIT_FACTOR"
-    return "CANDIDATE_FOR_PAPER_TEST"
+    return CANDIDATE_RECOMMENDATION
 
 
 def write_sweep_outputs(report: SweepReport, output_dir: Path | str) -> None:
