@@ -99,6 +99,7 @@ def run_paper_session(
     save_every: int = 50,
     output_dir: Path | str = "data/paper_sessions",
     config: BotConfig | None = None,
+    progress_every: int = 50,
 ) -> PaperSessionReport:
     """Run a paper session and persist report, latest snapshot, and trades."""
 
@@ -108,6 +109,8 @@ def run_paper_session(
         raise ValueError("target_closed_trades must be at least 1")
     if save_every < 1:
         raise ValueError("save_every must be at least 1")
+    if progress_every < 1:
+        raise ValueError("progress_every must be at least 1")
     if sleep_seconds < 0:
         raise ValueError("sleep_seconds cannot be negative")
 
@@ -118,6 +121,12 @@ def run_paper_session(
     equity_curve: list[float] = []
     source_used = source
     snapshot: dict = {}
+    started_at = time.monotonic()
+    print(
+        f"Starting Botify paper session: target_closed_trades={target_closed_trades}, "
+        f"max_ticks={ticks}, output_dir={session_dir}",
+        flush=True,
+    )
 
     for tick in range(1, ticks + 1):
         price = feed.latest_price()
@@ -126,11 +135,22 @@ def run_paper_session(
         equity_curve.append(snapshot["equity"])
         source_used = _source_used(source, feed)
 
-        if tick % save_every == 0 or snapshot["closed_trades"] >= target_closed_trades:
+        should_save = tick % save_every == 0 or snapshot["closed_trades"] >= target_closed_trades
+        if should_save:
             _write_snapshot(session_dir, snapshot, source_used=source_used)
             _write_trades_csv(session_dir, engine.state.trades)
+        if tick % progress_every == 0 or should_save:
+            _print_progress(
+                tick=tick,
+                ticks=ticks,
+                snapshot=snapshot,
+                source_used=source_used,
+                started_at=started_at,
+                session_dir=session_dir,
+            )
 
         if snapshot["closed_trades"] >= target_closed_trades:
+            print(f"Target reached: {snapshot['closed_trades']} closed trades.", flush=True)
             break
         if sleep_seconds:
             time.sleep(sleep_seconds)
@@ -169,6 +189,26 @@ def build_config_from_args(args: argparse.Namespace) -> BotConfig:
         config = replace(config, **applied)
     config.validate()
     return config
+
+
+def _print_progress(
+    *,
+    tick: int,
+    ticks: int,
+    snapshot: dict,
+    source_used: str,
+    started_at: float,
+    session_dir: Path,
+) -> None:
+    elapsed_minutes = (time.monotonic() - started_at) / 60
+    print(
+        f"[{datetime.now(UTC).isoformat(timespec='seconds')}] "
+        f"tick={tick}/{ticks} closed={snapshot['closed_trades']} "
+        f"open_positions={len(snapshot['positions'])} open_orders={len(snapshot['open_orders'])} "
+        f"equity=${snapshot['equity']:,.2f} realized=${snapshot['realized_pnl']:,.2f} "
+        f"source={source_used} elapsed={elapsed_minutes:.1f}m saved={session_dir}",
+        flush=True,
+    )
 
 
 def _build_feed(*, source: str, symbol: str) -> PriceFeed:
@@ -321,6 +361,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--sleep-seconds", type=float, default=0.0, help="Delay between ticks. Use 3 for dashboard-like polling.")
     parser.add_argument("--save-every", type=int, default=50, help="Persist snapshot/trades every N ticks.")
+    parser.add_argument("--progress-every", type=int, default=50, help="Print progress every N ticks so long runs do not look stuck.")
     parser.add_argument("--output-dir", default="data/paper_sessions", help="Directory for session folders.")
     parser.add_argument("--range-pct", type=float, default=None, help="Override grid range as a decimal, e.g. 0.035 for 3.5%%.")
     parser.add_argument("--entry-offset", type=float, default=None, help="Override passive_entry_offset_steps from optimizer output.")
@@ -341,6 +382,7 @@ def main() -> None:
         save_every=args.save_every,
         output_dir=args.output_dir,
         config=build_config_from_args(args),
+        progress_every=args.progress_every,
     )
     print("\n".join(report.lines()))
 
