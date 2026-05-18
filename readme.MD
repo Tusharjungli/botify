@@ -41,16 +41,33 @@ pip install -r requirements.txt
 
 ## Run the localhost dashboard
 
-### Mac/Linux/Git Bash
+### Recommended on every shell
+
+Use the cross-platform launcher so you do not need to remember different `PYTHONPATH` syntax for PowerShell, CMD, Git Bash, macOS, or Linux:
+
+```bash
+python run.py dashboard
+```
+
+### Mac/Linux/Git Bash alternative
 
 ```bash
 PYTHONPATH=src python src/main.py
 ```
 
-### Windows PowerShell
+### Windows PowerShell alternative
+
+PowerShell does **not** understand the Unix one-line syntax `PYTHONPATH=src python ...`. Use either `python run.py dashboard` or set the variable first:
 
 ```powershell
 $env:PYTHONPATH="src"
+python src/main.py
+```
+
+### Windows Command Prompt alternative
+
+```bat
+set PYTHONPATH=src
 python src/main.py
 ```
 
@@ -87,7 +104,13 @@ These controls are still simulation-only. They do not connect private Binance AP
 
 ## Run a BTC backtest
 
-After the dashboard works, run a historical/synthetic BTC backtest from the terminal:
+After the dashboard works, run a historical/synthetic BTC backtest from the terminal. The cross-platform command is:
+
+```bash
+python run.py backtest
+```
+
+If you are using Mac/Linux/Git Bash, the direct module command also works:
 
 ```bash
 PYTHONPATH=src python -m botify.backtest
@@ -99,13 +122,13 @@ Useful examples:
 
 ```bash
 # Force synthetic data so the command works offline
-PYTHONPATH=src python -m botify.backtest --source synthetic --limit 500
+python run.py backtest --source synthetic --limit 500
 
 # Try public Binance candles with a different interval
-PYTHONPATH=src python -m botify.backtest --source binance --interval 15m --limit 1000
+python run.py backtest --source binance --interval 15m --limit 1000
 
 # Stress a different strategy angle without editing code
-PYTHONPATH=src python -m botify.backtest --source synthetic --trading-bias LONG --range-pct 0.05 --grid-levels 12 --take-profit-grid-steps 3 --stop-loss-pct 0.05
+python run.py backtest --source synthetic --trading-bias LONG --range-pct 0.05 --grid-levels 12 --take-profit-grid-steps 3 --stop-loss-pct 0.05
 ```
 
 The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries. A profitable synthetic run is only a development signal, not proof of future live profit; test multiple intervals and market regimes before risking money.
@@ -135,6 +158,16 @@ The report shows ending equity, total return, realized/unrealized PnL, closed tr
 
 ## Tests
 
+Cross-platform:
+
+```bash
+python run.py test
+python run.py smoke
+```
+
+Mac/Linux/Git Bash alternative:
+
 ```bash
 PYTHONPATH=src pytest
+python test.py
 ```

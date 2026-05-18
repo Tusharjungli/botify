@@ -1,6 +1,10 @@
 """Beginner-friendly BTCUSDT backtesting command for Botify.
 
-Run from the repository root with:
+Run from the repository root with the cross-platform launcher:
+
+    python run.py backtest
+
+The direct Unix/Git Bash form is still supported:
 
     PYTHONPATH=src python -m botify.backtest
 
