@@ -39,7 +39,7 @@ def test_daily_loss_lock_disables_new_entries():
 
 
 def test_engine_routes_entries_through_paper_exchange_orders():
-    engine = GridEngine(BotConfig(cooldown_ticks=1))
+    engine = GridEngine(BotConfig(cooldown_ticks=1, trading_bias="LONG"))
     for _ in range(21):
         engine.on_price(100_000)
 
@@ -48,15 +48,15 @@ def test_engine_routes_entries_through_paper_exchange_orders():
     assert snapshot["positions"] == []
     assert len(snapshot["open_orders"]) == 1
     assert snapshot["open_orders"][0]["status"] == "NEW"
+    assert snapshot["open_orders"][0]["side"] == "BUY"
+    assert snapshot["open_orders"][0]["price"] < snapshot["price"]
 
-    order = snapshot["open_orders"][0]
-    fill_price = order["price"]
-    engine.on_price(fill_price - 1 if order["side"] == "BUY" else fill_price + 1)
+    engine.on_price(snapshot["open_orders"][0]["price"] * 0.999)
     snapshot = engine.snapshot()
 
     assert len(snapshot["recent_fills"]) == 1
     assert len(snapshot["positions"]) == 1
-    assert snapshot["positions"][0]["side"] in {"LONG", "SHORT"}
+    assert snapshot["positions"][0]["side"] == "LONG"
 
 
 def test_emergency_stop_cancels_orders_and_locks_entries():
@@ -74,185 +74,27 @@ def test_emergency_stop_cancels_orders_and_locks_entries():
     assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
 
 
-def test_pending_orders_have_separate_capacity_from_positions():
-    config = BotConfig(cooldown_ticks=1, max_open_positions=1, max_pending_orders=2, max_pending_orders_per_side=1)
-    engine = GridEngine(config)
-    engine.state.exchange.submit_limit_order(
-        side="BUY", price=99_000, quantity=0.01, tag="grid_entry:LONG"
-    )
-
-    snapshot = engine.snapshot()
-
-    assert len(snapshot["open_orders"]) == 1
-    assert snapshot["grid_plan"]["slots_used"] == 0
-    assert snapshot["grid_plan"]["slots_remaining"] == 1
-    assert snapshot["grid_plan"]["pending_slots_used"] == 1
-    assert snapshot["grid_plan"]["pending_slots_remaining"] == 1
-
-
-def test_notional_cap_blocks_new_grid_orders():
-    config = BotConfig(cooldown_ticks=1, max_total_notional_pct=0.01)
-    engine = GridEngine(config)
-
-    for _ in range(25):
-        engine.on_price(100_000)
-
-    snapshot = engine.snapshot()
-    assert snapshot["open_orders"] == []
-    assert snapshot["grid_plan"]["next_order_allowed_by_cap"] is False
-
-
-def test_stale_or_wrong_side_orders_are_canceled_before_new_entries():
-    config = BotConfig(cooldown_ticks=1, stale_order_grid_steps=1)
-    engine = GridEngine(config)
-    engine.state.exchange.submit_limit_order(
-        side="BUY", price=90_000, quantity=0.01, tag="grid_entry:LONG"
-    )
-
-    for _ in range(25):
-        engine.on_price(100_000)
-
-    snapshot = engine.snapshot()
-    assert any(order["status"] == "CANCELED" for order in snapshot["canceled_orders"])
-    assert all(order["price"] != 90_000 for order in snapshot["open_orders"])
-
-
-def test_spike_tick_cancels_pending_orders_before_they_fill():
-    config = BotConfig(cooldown_ticks=1, max_tick_jump_pct=0.03, spike_cooldown_ticks=5)
-    engine = GridEngine(config)
-    engine.on_price(100_000)
-    engine.state.exchange.submit_limit_order(
-        side="BUY", price=100_000, quantity=0.01, tag="grid_entry:LONG"
-    )
-
-    engine.on_price(80_000)
-    snapshot = engine.snapshot()
-
-    assert snapshot["mode"] == "PRICE_SPIKE_LOCK"
-    assert snapshot["recent_fills"] == []
-    assert snapshot["open_orders"] == []
-    assert snapshot["canceled_orders"][0]["status"] == "CANCELED"
-    assert engine.state.cooldown_until_tick > engine.state.tick_count
-
-
-def test_entries_use_passive_grid_levels_not_nearest_marketable_price():
-    engine = GridEngine(BotConfig(cooldown_ticks=1))
-
+def test_neutral_bias_places_two_sided_range_orders():
+    engine = GridEngine(BotConfig(cooldown_ticks=1, trading_bias="NEUTRAL"))
     for _ in range(21):
         engine.on_price(100_000)
 
     snapshot = engine.snapshot()
-    order = snapshot["open_orders"][0]
 
-    assert order["side"] == "BUY"
-    assert order["price"] < snapshot["price"]
-    assert snapshot["price"] - order["price"] < snapshot["grid_plan"]["step"]
-
-
-def test_pending_order_capacity_blocks_new_grid_orders():
-    config = BotConfig(cooldown_ticks=1, max_pending_orders=1, max_pending_orders_per_side=1)
-    engine = GridEngine(config)
-    engine.state.exchange.submit_limit_order(
-        side="SELL", price=101_000, quantity=0.01, tag="grid_entry:SHORT"
-    )
-
-    for _ in range(25):
-        engine.on_price(100_000)
-
-    snapshot = engine.snapshot()
-    assert len(snapshot["open_orders"]) == 1
-    assert snapshot["grid_plan"]["pending_slots_remaining"] == 0
+    assert {order["side"] for order in snapshot["open_orders"]} == {"BUY", "SELL"}
+    assert min(order["price"] for order in snapshot["open_orders"]) < snapshot["price"]
+    assert max(order["price"] for order in snapshot["open_orders"]) > snapshot["price"]
 
 
-def test_range_mode_builds_balanced_ladder_without_duplicate_prices():
-    config = BotConfig(cooldown_ticks=1, max_pending_orders=12, max_pending_orders_per_side=6)
-    engine = GridEngine(config)
-
-    for _ in range(80):
-        engine.on_price(100_000)
-
-    snapshot = engine.snapshot()
-    open_orders = snapshot["open_orders"]
-    buy_orders = [order for order in open_orders if order["side"] == "BUY"]
-    sell_orders = [order for order in open_orders if order["side"] == "SELL"]
-    prices = [order["price"] for order in open_orders]
-
-    assert snapshot["mode"] == "RANGE"
-    assert len(buy_orders) == config.max_pending_orders_per_side
-    assert len(sell_orders) == config.max_pending_orders_per_side
-    assert all(order["price"] < snapshot["price"] for order in buy_orders)
-    assert all(order["price"] > snapshot["price"] for order in sell_orders)
-    assert len(prices) == len(set(prices))
-
-
-def test_range_mode_keeps_both_sides_when_canceling_stale_orders():
-    config = BotConfig(cooldown_ticks=1, stale_order_grid_steps=3)
-    engine = GridEngine(config)
-    engine.state.exchange.submit_limit_order(
-        side="BUY", price=99_000, quantity=0.01, tag="grid_entry:LONG"
-    )
-    engine.state.exchange.submit_limit_order(
-        side="SELL", price=101_000, quantity=0.01, tag="grid_entry:SHORT"
-    )
-
-    for _ in range(25):
-        engine.on_price(100_000)
-
-    snapshot = engine.snapshot()
-    open_sides = {order["side"] for order in snapshot["open_orders"]}
-
-    assert snapshot["mode"] == "RANGE"
-    assert {"BUY", "SELL"}.issubset(open_sides)
-
-
-def test_tighter_passive_offset_allows_small_range_move_to_fill():
-    engine = GridEngine(BotConfig(cooldown_ticks=1))
-
+def test_stale_orders_are_canceled_before_new_entries():
+    engine = GridEngine(BotConfig(cooldown_ticks=1, max_order_age_ticks=2))
     for _ in range(21):
         engine.on_price(100_000)
 
-    first_order = engine.snapshot()["open_orders"][0]
-    assert first_order["side"] == "BUY"
-    assert 100_000 - first_order["price"] < engine.snapshot()["grid_plan"]["step"]
+    first_order_id = engine.snapshot()["open_orders"][0]["order_id"]
+    engine.on_price(100_100)
+    engine.on_price(100_200)
 
-    engine.on_price(99_880)
     snapshot = engine.snapshot()
 
-    assert len(snapshot["recent_fills"]) == 1
-    assert len(snapshot["positions"]) == 1
-    assert snapshot["positions"][0]["side"] == "LONG"
-
-
-def test_trend_flip_exit_waits_for_configured_adverse_move():
-    config = BotConfig(cooldown_ticks=1, trend_flip_min_loss_pct=0.003)
-    engine = GridEngine(config)
-    for _ in range(config.ema_slow):
-        engine.on_price(100_000)
-    position = _position(side="LONG", entry_price=100_000)
-    engine.state.positions.append(position)
-    engine.state.mode = "DOWNTREND"
-
-    engine._close_positions(99_850)
-    assert len(engine.state.positions) == 1
-    assert engine.state.trades == []
-
-    engine._close_positions(99_650)
-    assert engine.state.positions == []
-    assert engine.state.trades[-1].reason == "trend_flip"
-
-
-def _position(side: str = "LONG", entry_price: float = 100_000):
-    from botify.engine import Position
-
-    return Position(
-        side=side,
-        entry_price=entry_price,
-        notional=250,
-        quantity=0.0025,
-        opened_at="2026-01-01T00:00:00+00:00",
-        target_price=101_000 if side == "LONG" else 99_000,
-        stop_price=98_800 if side == "LONG" else 101_200,
-        peak_price=entry_price,
-        trough_price=entry_price,
-        grid_index=12,
-    )
+    assert any(order["order_id"] == first_order_id for order in snapshot["canceled_orders"])

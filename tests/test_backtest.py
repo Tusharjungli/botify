@@ -1,6 +1,6 @@
 import math
 
-from botify.backtest import interval_to_milliseconds, max_drawdown_pct, run_backtest, synthetic_closes
+from botify.backtest import max_drawdown_pct, run_backtest, synthetic_closes
 from botify.config import BotConfig
 
 
@@ -31,7 +31,8 @@ def test_max_drawdown_pct():
     assert max_drawdown_pct([100, 110, 99, 120]) == 10
 
 
-def test_interval_to_milliseconds_supports_common_binance_units():
-    assert interval_to_milliseconds("5m") == 300_000
-    assert interval_to_milliseconds("1h") == 3_600_000
-    assert interval_to_milliseconds("1d") == 86_400_000
+def test_default_synthetic_backtest_is_profitable_after_fees():
+    report = run_backtest(synthetic_closes(limit=1000), config=BotConfig(), interval="5m", source="synthetic")
+
+    assert report.total_return_pct > 0
+    assert report.profit_factor > 1

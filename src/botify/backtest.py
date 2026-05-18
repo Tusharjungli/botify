@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import time
 from dataclasses import dataclass
 from typing import Iterable
 from urllib.error import HTTPError, URLError
@@ -80,56 +79,12 @@ class BacktestReport:
 
 
 def fetch_binance_closes(symbol: str = "BTCUSDT", interval: str = "5m", limit: int = 1000) -> list[float]:
-    """Fetch public Binance candle closes without API keys.
+    """Fetch public Binance candle closes without API keys."""
 
-    Binance returns at most 1000 klines per request, so larger limits are
-    collected by paging forward from the oldest available chunk. This lets the
-    optimizer request longer samples like 2000-5000 candles when one 1000-candle
-    window does not produce enough closed paper trades.
-    """
-
-    if limit < 1:
-        raise ValueError("limit must be at least 1")
-
-    closes: list[float] = []
-    interval_ms = interval_to_milliseconds(interval)
-    start_time = int(time.time() * 1000) - (limit * interval_ms)
-    while len(closes) < limit:
-        chunk_limit = min(1000, limit - len(closes))
-        query_args: dict[str, int | str] = {
-            "symbol": symbol,
-            "interval": interval,
-            "limit": chunk_limit,
-            "startTime": start_time,
-        }
-        query = urlencode(query_args)
-        with urlopen(f"{BINANCE_KLINES_ENDPOINT}?{query}", timeout=8) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        if not payload:
-            break
-        closes.extend(float(candle[4]) for candle in payload)
-        if len(payload) < chunk_limit:
-            break
-        start_time = int(payload[-1][0]) + interval_ms
-    return closes[:limit]
-
-
-def interval_to_milliseconds(interval: str) -> int:
-    """Convert a Binance interval string to milliseconds for pagination."""
-
-    if len(interval) < 2:
-        raise ValueError("interval must include a number and unit, for example 5m")
-    amount = int(interval[:-1])
-    unit = interval[-1]
-    multipliers = {
-        "m": 60_000,
-        "h": 60 * 60_000,
-        "d": 24 * 60 * 60_000,
-        "w": 7 * 24 * 60 * 60_000,
-    }
-    if unit not in multipliers:
-        raise ValueError("unsupported Binance interval unit; use m, h, d, or w")
-    return amount * multipliers[unit]
+    query = urlencode({"symbol": symbol, "interval": interval, "limit": limit})
+    with urlopen(f"{BINANCE_KLINES_ENDPOINT}?{query}", timeout=8) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return [float(candle[4]) for candle in payload]
 
 
 def synthetic_closes(limit: int = 1000, start_price: float = 80_000.0) -> list[float]:
@@ -238,12 +193,26 @@ def parse_args() -> argparse.Namespace:
         default="auto",
         help="Use Binance public candles, deterministic synthetic candles, or automatic fallback.",
     )
+    parser.add_argument("--trading-bias", choices=("LONG", "SHORT", "NEUTRAL"), default="NEUTRAL", help="Choose long-only, short-only, or two-sided grid entries.")
+    parser.add_argument("--grid-levels", type=int, default=12, help="Number of grid levels in the active range.")
+    parser.add_argument("--range-pct", type=float, default=0.05, help="Base grid range as a decimal, for example 0.05 for 5%%.")
+    parser.add_argument("--take-profit-grid-steps", type=int, default=3, help="Grid steps between entry and take-profit.")
+    parser.add_argument("--stop-loss-pct", type=float, default=0.05, help="Stop loss from entry as a decimal.")
+    parser.add_argument("--max-order-age-ticks", type=int, default=12, help="Cancel unfilled entry orders after this many candles.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    config = BotConfig(symbol=args.symbol)
+    config = BotConfig(
+        symbol=args.symbol,
+        trading_bias=args.trading_bias,
+        grid_levels=args.grid_levels,
+        range_pct=args.range_pct,
+        take_profit_grid_steps=args.take_profit_grid_steps,
+        stop_loss_pct=args.stop_loss_pct,
+        max_order_age_ticks=args.max_order_age_ticks,
+    )
     closes, source_used = load_closes(
         source=args.source,
         symbol=config.symbol,

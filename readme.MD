@@ -9,16 +9,15 @@ Botify is a BTC-only cryptocurrency grid bot project. The current milestone is a
 - ✅ BTC-only simulator dashboard for `BTCUSDT`.
 - ✅ Public Binance BTC price feed with deterministic offline fallback.
 - ✅ Simulated balance, realized PnL, unrealized PnL, win rate, paper orders, fills, open positions, and recent trades.
-- ✅ Moderate-risk defaults: low per-order risk, separate open-position and pending-order capacity, balanced long/short range ladders, tighter passive grid entries, total committed-notional cap, spike-tick order cancel/cooldown, stale pending-order cleanup, 2x leverage by default, daily loss lock, profit lock, stop loss, trailing profit, and trend-flip exits.
-- ✅ Beginner-friendly BTC backtest command and headless paper-session collector.
-- ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, live-readiness checks, profit-stage guidance, and BTC price chart.
-- ✅ Local Binance Futures-style emulator with symbol filters, mark price status, liquidation estimates, and a read-only testnet adapter skeleton.
+- ✅ Tuned neutral BTC grid defaults: two-sided range entries, maker-style limit orders away from market, stale-order cancellation, max open orders, low per-order risk, 2x leverage by default, daily loss lock, profit lock, stop loss, and trailing profit.
+- ✅ Beginner-friendly BTC backtest command with CLI tuning knobs for grid range, levels, bias, take-profit steps, stop loss, and order age.
+- ✅ Dashboard pause/resume, reset, risk settings, quick synthetic backtest controls, and BTC price chart.
 - ❌ No private Binance API keys yet.
 - ❌ No live orders yet.
 
 ## Why the first step is simulation
 
-Binance Futures Grid automates buy/sell orders at preset intervals inside a configured range and supports auto/manual parameters and leverage. Botify keeps those grid ideas but adds local transparency and custom controls before live trading.
+Binance Futures Grid automates buy/sell orders at preset intervals inside a configured range and supports auto/manual parameters and leverage. Botify keeps those grid ideas but adds local transparency and custom controls before live trading. The current defaults are deliberately simulation-first: Botify places buy limits below market and sell limits above market, cancels stale unfilled paper orders, and reports profit factor/drawdown so changes are judged by evidence rather than hope.
 
 ## Install
 
@@ -67,13 +66,6 @@ You can also run the compatibility launcher:
 PYTHONPATH=. python bot.py
 ```
 
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH="."
-python bot.py
-```
-
 
 ## Dashboard controls
 
@@ -84,37 +76,26 @@ The localhost dashboard includes beginner-friendly controls:
 - **Cancel paper orders** — cancel all pending local paper orders without closing simulated positions.
 - **Emergency stop** — cancel pending paper orders and lock new simulated entries until reset.
 - **Run quick synthetic backtest** — run a 500-candle deterministic backtest directly from the browser.
-- **Trade Diagnostics** — inspect open exposure, pending exposure, committed notional cap usage, separate position/pending slot usage, long/short split, gross profit/loss, profit factor, expectancy, trend-flip exits, grid width, grid spacing, and nearest target distance.
-- **Live Readiness** — blocks moving to testnet/live until the run has enough closed trades, positive equity, a closed-trade edge, cap compliance, no risk locks, a public Binance price source, and a passing backtest gate.
-- **Profit Stages** — explain when unrealized PnL can become realized profit: entry fill, first exit, 30+ trade sample, positive paper edge, and confirming backtest.
-- **Run Review** — summarize whether the current sample is still too small, whether trend-flip exits are frequent, whether the run is not live-ready, and how much simulated exposure is open.
-- **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions. In range mode, pending orders are built as a balanced ladder below and above the current BTC price rather than repeatedly stacking one side; the first entry is intentionally closer than one full grid step so quiet one-hour sessions can still get realistic paper fills.
-- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs. For safer overnight collection, use the headless paper-session command below so data is written to disk even if the browser is closed.
-- **Risk Settings** — show the active BTC-only grid, leverage, risk, stop, trailing, spike guard, and daily lock settings.
+- **Trade Diagnostics** — inspect open exposure, long/short split, gross profit/loss, profit factor, expectancy, grid width, and nearest target distance.
+- **Run Review** — summarize whether the current sample is still too small, whether closed-trade losses are larger than wins, and how much simulated exposure is open.
+- **Paper Orders / Fills** — show pending local limit orders and recently filled simulated exchange orders before they become positions.
+- **Export trades CSV** — download simulated closed trades for spreadsheet review after longer localhost runs.
+- **Risk Settings** — show the active BTC-only grid, trading bias, max open orders, entry offset, order max age, leverage, risk, stop, trailing, and daily lock settings.
 - **BTC Price Chart** — draw recent BTC ticks, grid range, open entry levels, targets, and stops with stacked labels so crowded markers remain readable.
 
 These controls are still simulation-only. They do not connect private Binance API keys and do not place live orders.
 
 ## Run a BTC backtest
 
-After the dashboard works, run a historical/synthetic BTC backtest from the terminal.
-
-Mac/Linux/Git Bash:
+After the dashboard works, run a historical/synthetic BTC backtest from the terminal:
 
 ```bash
 PYTHONPATH=src python -m botify.backtest
 ```
 
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m botify.backtest
-```
-
 By default, Botify tries public Binance `BTCUSDT` 5-minute candles and automatically falls back to deterministic synthetic prices if Binance is unavailable.
 
-Useful examples for Mac/Linux/Git Bash:
+Useful examples:
 
 ```bash
 # Force synthetic data so the command works offline
@@ -122,94 +103,12 @@ PYTHONPATH=src python -m botify.backtest --source synthetic --limit 500
 
 # Try public Binance candles with a different interval
 PYTHONPATH=src python -m botify.backtest --source binance --interval 15m --limit 1000
+
+# Stress a different strategy angle without editing code
+PYTHONPATH=src python -m botify.backtest --source synthetic --trading-bias LONG --range-pct 0.05 --grid-levels 12 --take-profit-grid-steps 3 --stop-loss-pct 0.05
 ```
 
-Useful examples for Windows PowerShell after setting `$env:PYTHONPATH="src"`:
-
-```powershell
-python -m botify.backtest --source synthetic --limit 500
-python -m botify.backtest --source binance --interval 15m --limit 1000
-```
-
-The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries.
-
-
-## Collect paper-trading data without keeping the browser open
-
-For serious tuning, do **not** judge the bot from a 1-2 hour dashboard run. Use the headless paper-session collector so Botify writes `report.json`, `latest_snapshot.json`, and `trades.csv` under `data/paper_sessions/` while it runs. The dashboard can be closed; only the terminal process needs to stay alive.
-
-Mac/Linux/Git Bash:
-
-```bash
-# Fast local smoke run with deterministic prices
-PYTHONPATH=src python -m botify.paper_session --source synthetic --ticks 500 --target-closed-trades 5
-
-# Paper collect from Binance public ticker, saving every 20 ticks
-PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 10000 --target-closed-trades 30 --save-every 20
-```
-
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m botify.paper_session --source synthetic --ticks 500 --target-closed-trades 5
-python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 10000 --target-closed-trades 30 --save-every 20
-```
-
-Do not connect live Binance keys just because one short run is green. The current live-readiness gate expects at least 30 closed simulated trades, positive equity, positive expectancy/profit factor, exposure within caps, no risk locks, and a passing backtest before moving to Binance Futures **testnet**. Live funds should come only after testnet order placement and reconciliation are proven stable.
-
-
-## Tune parameters before testnet
-
-A short paper run can look promising while the backtest gate still fails. Before Binance testnet, run the parameter sweep and compare safer settings across the same historical/synthetic price series.
-
-Mac/Linux/Git Bash:
-
-```bash
-PYTHONPATH=src python -m botify.optimize --source synthetic --limit 500 --top 10
-PYTHONPATH=src python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
-# If every result says NEEDS_MORE_TRADES, run a longer paginated Binance sweep:
-python -m botify.optimize --source binance --interval 5m --limit 3000 --top 10
-```
-
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m botify.optimize --source synthetic --limit 500 --top 10
-python -m botify.optimize --source binance --interval 5m --limit 1000 --top 10
-# If every result says NEEDS_MORE_TRADES, run a longer paginated Binance sweep:
-python -m botify.optimize --source binance --interval 5m --limit 3000 --top 10
-```
-
-The sweep writes `data/optimization/sweep_report.json` and `data/optimization/sweep_results.csv`. Results are now ordered by live-readiness gates first, then score, so actionable `CANDIDATE_FOR_PAPER_TEST` rows are promoted above high-profit-factor rows that still have too few trades. The report also prints a `Best paper-test candidates` section and a ready-to-copy `python -m botify.paper_session ...` command for the best candidate. Treat only variants with enough trades, ending equity above start, and profit factor above 1.05 as paper-test candidates; do not use a green short paper sample to skip testnet. If the report says `Candidates: 0` or every row says `NEEDS_MORE_TRADES`, keep sweeping longer samples and do not connect Binance testnet/live yet. The sweep also tests `trend_flip_min_loss_pct`, which delays trend-flip exits until a position has moved far enough against entry; this is useful when backtests show many small trend-flip losses.
-
-
-## Paper-test an optimizer candidate
-
-When the optimizer prints `CANDIDATE_FOR_PAPER_TEST`, run a headless paper session with those exact settings before any testnet order work. Prefer the command printed under `Next paper-session command`; it converts the best candidate's percentage values into the decimal CLI flags expected by `paper_session`. For a candidate like `range=3.50%`, `offset=0.35`, `min_profit=0.15%`, `trail=0.40%`, `stop=1.00%`, `trend_flip=0.60%`, use decimals in the CLI:
-
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
-```
-
-Mac/Linux/Git Bash:
-
-```bash
-PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
-```
-
-The command now prints progress every `--progress-every` ticks and writes files every `--save-every` ticks, so a long run should not look frozen. If you need to stop it, press `Ctrl+C`; the latest saved files remain in `data/paper_sessions/`. If a paper run has 20+ closed trades, equity below start, PF below 1.0, or negative expectancy, reject that optimizer candidate instead of running it longer. Only consider Binance Futures testnet order placement if this follow-up paper run also stays positive with PF >= 1.05 and acceptable drawdown.
-
-If an overnight ticker session disagrees with a candle optimizer result, replay historical candle closes with the same interval before trying another overnight run. This checks whether the candidate still works in the same data shape the optimizer used:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m botify.paper_session --source binance-candles --interval 5m --ticks 3000 --target-closed-trades 30 --save-every 100 --progress-every 100 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
-```
+The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries. A profitable synthetic run is only a development signal, not proof of future live profit; test multiple intervals and market regimes before risking money.
 
 ## API endpoints
 
@@ -229,26 +128,13 @@ python -m botify.paper_session --source binance-candles --interval 5m --ticks 30
 1. **Local BTC simulator and dashboard** — done.
 2. **BTC backtesting command** — done.
 3. **Dashboard controls: pause/resume, reset, cancel orders, emergency stop, settings panel, quick backtest, price chart, diagnostics, run review, paper order lifecycle, and CSV export** — done.
-4. **Headless paper-session collector with durable JSON/CSV outputs** — done.
-5. **Parameter sweep for safer backtest-first tuning** — done.
-6. Use the live-readiness panel as the gate for moving from local simulation to Binance Futures testnet; do not connect live keys while any gate is failing.
-7. Expand Binance-style local controls with richer order reconciliation, funding-rate modeling, partial fills, slippage, spike/outlier reports, and exchange filters.
-8. Add signed read-only Binance Futures testnet calls for exchange info, account info, positions, mark price, and user-stream reconciliation.
-9. Add testnet-only order placement behind manual confirmation and kill-switch checks.
-10. Add production safety gates: manual confirmation, exchange-side max leverage checks, kill switch, error alerts, and audit logs.
-11. Only after BTC is stable, consider adding other symbols.
+4. Add paper-trading mode with Binance testnet or a richer local exchange emulator.
+5. Add API key handling, signed Binance Futures connectivity, and order reconciliation.
+6. Add production safety gates: manual confirmation, max leverage, max notional, kill switch, error alerts, and audit logs.
+7. Only after BTC is stable, consider adding other symbols.
 
 ## Tests
 
-Mac/Linux/Git Bash:
-
 ```bash
 PYTHONPATH=src pytest
-```
-
-Windows PowerShell:
-
-```powershell
-$env:PYTHONPATH="src"
-pytest
 ```

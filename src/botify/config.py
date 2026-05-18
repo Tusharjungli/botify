@@ -16,28 +16,24 @@ class BotConfig:
 
     symbol: str = "BTCUSDT"
     starting_balance: float = 10_000.0
-    grid_levels: int = 24
-    range_pct: float = 0.035
+    grid_levels: int = 12
+    range_pct: float = 0.05
     leverage: float = 2.0
     base_order_risk_pct: float = 0.0125
     max_open_positions: int = 6
-    max_pending_orders: int = 12
-    max_pending_orders_per_side: int = 6
-    max_total_notional_pct: float = 0.30
-    passive_entry_offset_steps: float = 0.35
-    stale_order_grid_steps: float = 6.5
+    max_open_orders: int = 4
+    entry_grid_offset: int = 1
+    trading_bias: str = "NEUTRAL"
+    max_order_age_ticks: int = 12
     max_daily_loss_pct: float = 0.025
     daily_profit_lock_pct: float = 0.035
-    stop_loss_pct: float = 0.012
-    take_profit_grid_steps: int = 1
+    stop_loss_pct: float = 0.05
+    take_profit_grid_steps: int = 3
     maker_fee_pct: float = 0.0002
     taker_fee_pct: float = 0.0005
     trailing_stop_pct: float = 0.004
     min_grid_profit_pct: float = 0.0015
-    trend_flip_min_loss_pct: float = 0.0
     cooldown_ticks: int = 2
-    max_tick_jump_pct: float = 0.03
-    spike_cooldown_ticks: int = 10
     ema_fast: int = 9
     ema_slow: int = 21
     trend_strength_threshold: float = 0.00035
@@ -45,6 +41,8 @@ class BotConfig:
     def validate(self) -> None:
         if self.symbol != "BTCUSDT":
             raise ValueError("Botify milestone 1 is BTC-only. Use symbol='BTCUSDT'.")
+        if self.trading_bias not in {"LONG", "SHORT", "NEUTRAL"}:
+            raise ValueError("trading_bias must be LONG, SHORT, or NEUTRAL.")
         if self.grid_levels < 4:
             raise ValueError("grid_levels must be at least 4.")
         if not 0 < self.range_pct < 0.25:
@@ -53,23 +51,15 @@ class BotConfig:
             raise ValueError("base_order_risk_pct must be > 0 and <= 5%.")
         if self.max_open_positions < 1:
             raise ValueError("max_open_positions must be at least 1.")
-        if self.max_pending_orders < 1:
-            raise ValueError("max_pending_orders must be at least 1.")
-        if self.max_pending_orders_per_side < 1:
-            raise ValueError("max_pending_orders_per_side must be at least 1.")
-        if self.max_pending_orders_per_side > self.max_pending_orders:
-            raise ValueError("max_pending_orders_per_side cannot exceed max_pending_orders.")
-        if not 0 < self.max_total_notional_pct <= 1:
-            raise ValueError("max_total_notional_pct must be > 0 and <= 100%.")
-        if not 0 < self.passive_entry_offset_steps <= 2:
-            raise ValueError("passive_entry_offset_steps must be > 0 and <= 2 grid steps.")
-        if self.stale_order_grid_steps <= 0:
-            raise ValueError("stale_order_grid_steps must be positive.")
-        if not 0 <= self.trend_flip_min_loss_pct <= self.stop_loss_pct:
-            raise ValueError("trend_flip_min_loss_pct must be between 0 and stop_loss_pct.")
-        if not 0 < self.max_tick_jump_pct <= 0.20:
-            raise ValueError("max_tick_jump_pct must be > 0 and <= 20%.")
-        if self.spike_cooldown_ticks < 1:
-            raise ValueError("spike_cooldown_ticks must be at least 1.")
+        if self.max_open_orders < 1:
+            raise ValueError("max_open_orders must be at least 1.")
+        if self.entry_grid_offset < 1:
+            raise ValueError("entry_grid_offset must be at least 1.")
+        if self.take_profit_grid_steps < 1:
+            raise ValueError("take_profit_grid_steps must be at least 1.")
+        if self.max_order_age_ticks < 1:
+            raise ValueError("max_order_age_ticks must be at least 1.")
+        if not 0 < self.stop_loss_pct < 0.25:
+            raise ValueError("stop_loss_pct must be between 0 and 25%.")
         if self.leverage < 1 or self.leverage > 5:
             raise ValueError("For moderate risk, leverage must stay between 1x and 5x.")
