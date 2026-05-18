@@ -128,7 +128,7 @@ python run.py backtest --source synthetic --limit 500
 python run.py backtest --source binance --interval 15m --limit 1000
 
 # Stress a different strategy angle without editing code
-python run.py backtest --source synthetic --trading-bias LONG --range-pct 0.05 --grid-levels 12 --take-profit-grid-steps 3 --stop-loss-pct 0.05
+python run.py backtest --source synthetic --trading-bias LONG --range-pct 0.05 --grid-levels 12 --entry-offset 0.5 --take-profit-grid-steps 3 --stop-loss-pct 0.05
 ```
 
 The report shows ending equity, total return, realized/unrealized PnL, closed trades, win rate, profit factor, max drawdown, biggest win/loss, open positions, and whether risk locks disabled new entries. A profitable synthetic run is only a development signal, not proof of future live profit; test multiple intervals and market regimes before risking money.

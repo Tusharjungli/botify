@@ -203,6 +203,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--take-profit-grid-steps", type=int, default=3, help="Grid steps between entry and take-profit.")
     parser.add_argument("--stop-loss-pct", type=float, default=0.05, help="Stop loss from entry as a decimal.")
     parser.add_argument("--max-order-age-ticks", type=int, default=12, help="Cancel unfilled entry orders after this many candles.")
+    parser.add_argument("--entry-offset", type=float, default=1.0, help="Place passive entries this many grid steps away from the current price.")
+    parser.add_argument("--trend-flip-min-loss-pct", type=float, default=0.0, help="Optional loss threshold for trend-flip exits; 0 disables this exit.")
     return parser.parse_args()
 
 
@@ -216,6 +218,8 @@ def main() -> None:
         take_profit_grid_steps=args.take_profit_grid_steps,
         stop_loss_pct=args.stop_loss_pct,
         max_order_age_ticks=args.max_order_age_ticks,
+        passive_entry_offset_steps=args.entry_offset,
+        trend_flip_min_loss_pct=args.trend_flip_min_loss_pct,
     )
     closes, source_used = load_closes(
         source=args.source,

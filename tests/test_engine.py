@@ -98,3 +98,29 @@ def test_stale_orders_are_canceled_before_new_entries():
     snapshot = engine.snapshot()
 
     assert any(order["order_id"] == first_order_id for order in snapshot["canceled_orders"])
+
+
+def test_config_accepts_optimizer_and_paper_session_fields():
+    from dataclasses import replace
+
+    config = replace(
+        BotConfig(),
+        passive_entry_offset_steps=0.5,
+        trend_flip_min_loss_pct=0.006,
+    )
+
+    assert config.passive_entry_offset_steps == 0.5
+    assert config.trend_flip_min_loss_pct == 0.006
+
+
+def test_fractional_passive_entry_offset_is_used_for_orders():
+    engine = GridEngine(BotConfig(cooldown_ticks=1, passive_entry_offset_steps=0.5, trading_bias="LONG"))
+    for _ in range(21):
+        engine.on_price(100_000)
+
+    snapshot = engine.snapshot()
+    step = snapshot["grid"][1] - snapshot["grid"][0]
+    order = snapshot["open_orders"][0]
+
+    assert order["side"] == "BUY"
+    assert abs(order["price"] - (snapshot["price"] - step * 0.5)) < 0.01

@@ -202,12 +202,16 @@ class GridEngine:
 
         step = grid[1] - grid[0]
         nearest_index = min(range(len(grid)), key=lambda i: abs(grid[i] - price))
-        offset = self.config.entry_grid_offset
+        passive_offset = self.config.passive_entry_offset_steps
+        legacy_offset = self.config.entry_grid_offset
         if allowed_side == "LONG":
-            index = max(0, nearest_index - offset)
+            index = max(0, nearest_index - max(1, round(passive_offset or legacy_offset)))
+            order_price = price - step * passive_offset
+            order_price = max(grid[0], order_price)
         else:
-            index = min(len(grid) - 1, nearest_index + offset)
-        order_price = grid[index]
+            index = min(len(grid) - 1, nearest_index + max(1, round(passive_offset or legacy_offset)))
+            order_price = price + step * passive_offset
+            order_price = min(grid[-1], order_price)
 
         if allowed_side == "LONG" and order_price >= price:
             return
@@ -349,6 +353,12 @@ class GridEngine:
                 return "stop_loss"
             if price <= position.peak_price * (1 - self.config.trailing_stop_pct) and price > position.entry_price:
                 return "trailing_profit"
+            if (
+                self.config.trend_flip_min_loss_pct > 0
+                and self.state.mode == "DOWNTREND"
+                and price <= position.entry_price * (1 - self.config.trend_flip_min_loss_pct)
+            ):
+                return "trend_flip"
         else:
             if price <= position.target_price and profit_pct >= self.config.min_grid_profit_pct:
                 return "grid_take_profit"
@@ -356,6 +366,12 @@ class GridEngine:
                 return "stop_loss"
             if price >= position.trough_price * (1 + self.config.trailing_stop_pct) and price < position.entry_price:
                 return "trailing_profit"
+            if (
+                self.config.trend_flip_min_loss_pct > 0
+                and self.state.mode == "UPTREND"
+                and price >= position.entry_price * (1 + self.config.trend_flip_min_loss_pct)
+            ):
+                return "trend_flip"
         return None
 
     def _daily_pnl_pct(self, equity: float) -> float:
