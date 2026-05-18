@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
 
-from .backtest import format_profit_factor, max_drawdown_pct
+from .backtest import format_profit_factor, load_closes, max_drawdown_pct
 from .config import BotConfig
 from .engine import GridEngine, Trade
 from .market import BinancePublicPriceFeed, DeterministicPriceFeed, HybridPriceFeed, PriceFeed
@@ -100,6 +100,7 @@ def run_paper_session(
     output_dir: Path | str = "data/paper_sessions",
     config: BotConfig | None = None,
     progress_every: int = 50,
+    interval: str = "5m",
 ) -> PaperSessionReport:
     """Run a paper session and persist report, latest snapshot, and trades."""
 
@@ -116,24 +117,28 @@ def run_paper_session(
 
     config = config or BotConfig()
     engine = GridEngine(config)
-    feed = _build_feed(source=source, symbol=config.symbol)
+    historical_prices, historical_source = _historical_prices(source=source, symbol=config.symbol, interval=interval, limit=ticks)
+    feed = None if historical_prices is not None else _build_feed(source=source, symbol=config.symbol)
     session_dir = _session_dir(output_dir)
     equity_curve: list[float] = []
     source_used = source
     snapshot: dict = {}
     started_at = time.monotonic()
     print(
-        f"Starting Botify paper session: target_closed_trades={target_closed_trades}, "
-        f"max_ticks={ticks}, output_dir={session_dir}",
+        f"Starting Botify paper session: source={source}, interval={interval}, "
+        f"target_closed_trades={target_closed_trades}, max_ticks={ticks}, output_dir={session_dir}",
         flush=True,
     )
 
-    for tick in range(1, ticks + 1):
-        price = feed.latest_price()
+    price_stream = historical_prices if historical_prices is not None else range(ticks)
+    for tick, item in enumerate(price_stream, start=1):
+        if tick > ticks:
+            break
+        price = float(item) if historical_prices is not None else feed.latest_price()
         engine.on_price(price)
         snapshot = engine.snapshot()
         equity_curve.append(snapshot["equity"])
-        source_used = _source_used(source, feed)
+        source_used = historical_source or _source_used(source, feed)
 
         should_save = tick % save_every == 0 or snapshot["closed_trades"] >= target_closed_trades
         if should_save:
@@ -211,6 +216,15 @@ def _print_progress(
     )
 
 
+def _historical_prices(*, source: str, symbol: str, interval: str, limit: int) -> tuple[list[float] | None, str | None]:
+    if not source.endswith("-candles"):
+        return None, None
+
+    candle_source = source.removesuffix("-candles")
+    closes, source_used = load_closes(source=candle_source, symbol=symbol, interval=interval, limit=limit)
+    return closes, f"{source_used}_{interval}_candles"
+
+
 def _build_feed(*, source: str, symbol: str) -> PriceFeed:
     if source == "synthetic":
         return DeterministicPriceFeed(start_price=80_000)
@@ -221,10 +235,12 @@ def _build_feed(*, source: str, symbol: str) -> PriceFeed:
             live_feed=BinancePublicPriceFeed(symbol=symbol),
             fallback_feed=DeterministicPriceFeed(start_price=80_000),
         )
-    raise ValueError("source must be auto, binance, or synthetic")
+    raise ValueError("source must be auto, binance, synthetic, auto-candles, binance-candles, or synthetic-candles")
 
 
-def _source_used(requested_source: str, feed: PriceFeed) -> str:
+def _source_used(requested_source: str, feed: PriceFeed | None) -> str:
+    if feed is None:
+        return requested_source
     if requested_source == "auto" and isinstance(feed, HybridPriceFeed):
         return "synthetic_fallback" if feed.using_fallback else "binance_public"
     if requested_source == "binance":
@@ -305,6 +321,12 @@ def _recommendation(
 ) -> str:
     if lock_reason:
         return "NOT_READY: risk/manual lock is active; investigate before testnet."
+    diagnostic_sample = 20
+    if target_closed_trades >= diagnostic_sample and closed_trades >= diagnostic_sample and ending_equity <= starting_balance and (profit_factor < 1.0 or expectancy <= 0):
+        return (
+            "REJECT_CANDIDATE: paper run is losing before the target sample; "
+            "go back to optimizer/candle replay instead of running this setting longer."
+        )
     if closed_trades < target_closed_trades:
         return f"NOT_READY: collect at least {target_closed_trades} closed paper trades before judging edge."
     if ending_equity <= starting_balance:
@@ -355,10 +377,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-closed-trades", type=int, default=30, help="Stop once this many trades have closed.")
     parser.add_argument(
         "--source",
-        choices=("auto", "binance", "synthetic"),
+        choices=("auto", "binance", "synthetic", "auto-candles", "binance-candles", "synthetic-candles"),
         default="auto",
-        help="Use Binance public ticker, deterministic synthetic data, or automatic fallback.",
+        help="Use live ticker data, deterministic synthetic data, or replay historical candle closes.",
     )
+    parser.add_argument("--interval", default="5m", help="Candle interval for *-candles sources, for example 1m, 5m, 15m, 1h.")
     parser.add_argument("--sleep-seconds", type=float, default=0.0, help="Delay between ticks. Use 3 for dashboard-like polling.")
     parser.add_argument("--save-every", type=int, default=50, help="Persist snapshot/trades every N ticks.")
     parser.add_argument("--progress-every", type=int, default=50, help="Print progress every N ticks so long runs do not look stuck.")
@@ -383,6 +406,7 @@ def main() -> None:
         output_dir=args.output_dir,
         config=build_config_from_args(args),
         progress_every=args.progress_every,
+        interval=args.interval,
     )
     print("\n".join(report.lines()))
 

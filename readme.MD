@@ -202,7 +202,14 @@ Mac/Linux/Git Bash:
 PYTHONPATH=src python -m botify.paper_session --source auto --sleep-seconds 3 --ticks 20000 --target-closed-trades 100 --save-every 20 --progress-every 20 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
 ```
 
-The command now prints progress every `--progress-every` ticks and writes files every `--save-every` ticks, so a long run should not look frozen. If you need to stop it, press `Ctrl+C`; the latest saved files remain in `data/paper_sessions/`. Only consider Binance Futures testnet order placement if this follow-up paper run also stays positive with PF >= 1.05 and acceptable drawdown.
+The command now prints progress every `--progress-every` ticks and writes files every `--save-every` ticks, so a long run should not look frozen. If you need to stop it, press `Ctrl+C`; the latest saved files remain in `data/paper_sessions/`. If a paper run has 20+ closed trades, equity below start, PF below 1.0, or negative expectancy, reject that optimizer candidate instead of running it longer. Only consider Binance Futures testnet order placement if this follow-up paper run also stays positive with PF >= 1.05 and acceptable drawdown.
+
+If an overnight ticker session disagrees with a candle optimizer result, replay historical candle closes with the same interval before trying another overnight run. This checks whether the candidate still works in the same data shape the optimizer used:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m botify.paper_session --source binance-candles --interval 5m --ticks 3000 --target-closed-trades 30 --save-every 100 --progress-every 100 --range-pct 0.035 --entry-offset 0.35 --min-grid-profit-pct 0.0015 --trailing-stop-pct 0.004 --stop-loss-pct 0.01 --trend-flip-min-loss-pct 0.006
+```
 
 ## API endpoints
 

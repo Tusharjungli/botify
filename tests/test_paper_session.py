@@ -2,7 +2,7 @@ from argparse import Namespace
 from pathlib import Path
 import json
 
-from botify.paper_session import build_config_from_args, run_paper_session
+from botify.paper_session import _recommendation, build_config_from_args, run_paper_session
 
 
 def test_paper_session_writes_report_snapshot_and_trades(tmp_path):
@@ -30,6 +30,35 @@ def test_paper_session_writes_report_snapshot_and_trades(tmp_path):
     assert payload["ticks"] == snapshot["tick_count"]
     assert "recommendation" in payload
     assert "side,entry_price,exit_price,quantity,pnl,reason,opened_at,closed_at" in trades_csv
+
+
+def test_paper_session_replays_synthetic_candles(tmp_path):
+    report = run_paper_session(
+        ticks=80,
+        target_closed_trades=1,
+        source="synthetic-candles",
+        interval="5m",
+        sleep_seconds=0,
+        save_every=20,
+        output_dir=tmp_path,
+    )
+
+    assert report.source == "synthetic_5m_candles"
+    assert 1 <= report.ticks <= 80
+
+
+def test_paper_session_rejects_losing_diagnostic_sample_before_target():
+    recommendation = _recommendation(
+        closed_trades=29,
+        target_closed_trades=100,
+        ending_equity=9_947.22,
+        starting_balance=10_000,
+        profit_factor=0.32,
+        expectancy=-1.77,
+        lock_reason="",
+    )
+
+    assert recommendation.startswith("REJECT_CANDIDATE")
 
 
 def test_paper_session_config_overrides_match_optimizer_candidate():
