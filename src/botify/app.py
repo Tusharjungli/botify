@@ -6,6 +6,7 @@ import csv
 import io
 import json
 import math
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Lock
@@ -26,6 +27,7 @@ price_feed = HybridPriceFeed(
 state_lock = Lock()
 paused = False
 last_backtest: dict | None = None
+session_started_at = datetime.now(UTC)
 
 PAGE = """
 <!doctype html>
@@ -132,6 +134,13 @@ PAGE = """
 <script>
 const money = (n) => Number(n).toLocaleString(undefined, {style: 'currency', currency: 'USD'});
 const num = (n, d=2) => Number(n).toLocaleString(undefined, {maximumFractionDigits: d});
+function formatElapsed(seconds) {
+  const s = Math.max(0, Math.floor(Number(seconds || 0)));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}h ${String(m).padStart(2, '0')}m ${String(sec).padStart(2, '0')}s`;
+}
 function pnlClass(n) { return Number(n) >= 0 ? 'good' : 'bad'; }
 function factorClass(n) { return n === null || Number(n) >= 1 ? 'good' : 'bad'; }
 async function postJson(path) {
@@ -151,7 +160,8 @@ function renderDashboard(data) {
   const statusText = data.paused
     ? 'Paused: Botify is not advancing new price ticks. Click Resume to continue.'
     : 'Running: Botify advances one simulated tick every refresh. No live orders are placed.';
-  document.getElementById('statusLine').textContent = data.control_message ? `${data.control_message} ${statusText}` : statusText;
+  const runtimeText = `Runtime: ${formatElapsed(data.uptime_seconds)} since ${new Date(data.session_started_at).toLocaleString()}.`;
+  document.getElementById('statusLine').textContent = data.control_message ? `${data.control_message} ${statusText} ${runtimeText}` : `${statusText} ${runtimeText}`;
   document.getElementById('cards').innerHTML = [
     ['BTC Price', money(data.price), ''],
     ['Price Source', `<span class="pill">${data.price_source}</span>`, ''],
@@ -166,6 +176,7 @@ function renderDashboard(data) {
     ['Trading', data.trading_enabled ? 'Enabled' : 'Locked', data.trading_enabled ? 'good' : 'warn'],
     ['Win Rate', `${num(data.win_rate)}%`, ''],
     ['Closed Trades', data.closed_trades, ''],
+    ['Runtime', formatElapsed(data.uptime_seconds), ''],
   ].map(([label, value, klass]) => `<article class="card"><div class="label">${label}</div><div class="value ${klass}">${value}</div></article>`).join('');
 
   renderDiagnostics(data.diagnostics);
@@ -451,7 +462,7 @@ def control_state() -> dict:
     """Return pause/reset related state without the full trading snapshot."""
 
     with state_lock:
-        state = {"paused": paused, "tick_count": engine.state.tick_count}
+        state = {"paused": paused, "tick_count": engine.state.tick_count, "session_started_at": session_started_at.isoformat(), "uptime_seconds": _uptime_seconds()}
     return state
 
 
@@ -476,11 +487,12 @@ def toggle_pause() -> dict:
 def reset_simulation() -> dict:
     """Reset simulated account state while keeping Botify BTC-only settings."""
 
-    global engine, paused, last_backtest
+    global engine, paused, last_backtest, session_started_at
     with state_lock:
         engine = GridEngine(CONFIG)
         paused = False
         last_backtest = None
+        session_started_at = datetime.now(UTC)
         snapshot = _snapshot_unlocked()
     return snapshot
 
@@ -537,8 +549,14 @@ def _snapshot_unlocked() -> dict:
     snapshot["chart"] = _chart_payload(snapshot)
     snapshot["diagnostics"] = _diagnostics_payload(snapshot)
     snapshot["review_notes"] = _review_notes_payload(snapshot, snapshot["diagnostics"])
+    snapshot["session_started_at"] = session_started_at.isoformat()
+    snapshot["uptime_seconds"] = _uptime_seconds()
     return snapshot
 
+
+
+def _uptime_seconds() -> int:
+    return max(0, int((datetime.now(UTC) - session_started_at).total_seconds()))
 
 def _diagnostics_payload(snapshot: dict) -> dict:
     trades = engine.state.trades

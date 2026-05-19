@@ -105,3 +105,21 @@ def test_cancel_orders_and_emergency_stop_controls():
     assert "Manual emergency stop" in stop_snapshot["lock_reason"]
     assert stop_snapshot["open_orders"] == []
     assert "Emergency stop active" in stop_snapshot["control_message"]
+
+
+def test_runtime_is_exposed_in_snapshot_and_resets():
+    app.reset_simulation()
+    first = app.snapshot_with_controls()
+
+    assert "session_started_at" in first
+    assert "uptime_seconds" in first
+    assert isinstance(first["uptime_seconds"], int)
+
+    app.engine.on_price(80_000)
+    second = app.snapshot_with_controls()
+    assert second["uptime_seconds"] >= first["uptime_seconds"]
+
+    app.reset_simulation()
+    reset = app.snapshot_with_controls()
+    assert reset["tick_count"] == 0
+    assert reset["uptime_seconds"] >= 0
